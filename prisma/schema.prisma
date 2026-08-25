@@ -1,0 +1,71 @@
+// Wiggli Calendar Demo — data model
+// Event ↔ Attendee (1:N). Attendee carries the live RSVP status.
+// RsvpTokenLog indexes by one-click token so /api/rsvp can resolve (event, attendee)
+// without leaking internal IDs.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Event {
+  id             String   @id @default(cuid())
+  googleEventId  String? // Google Calendar event ID, set after events.insert
+  iCalUID        String   @unique // shared between GCal event & our .ics attachment
+  summary        String
+  description    String?
+  location       String?
+  start          DateTime
+  end            DateTime
+  timezone       String
+  emailSubject   String?
+  emailHtml      String? // custom HTML body overriding the default branded template
+  organizerEmail String
+  sequence       Int      @default(0) // ICS SEQUENCE — bumped on each re-send/update
+  hangoutLink    String? // real Google Meet URL when a conference was provisioned
+  reminderMinutes Int? // null = calendar default; stored for email rendering
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  attendees Attendee[]
+
+  @@index([googleEventId])
+}
+
+model Attendee {
+  id          String    @id @default(cuid())
+  eventId     String
+  email       String
+  name        String?
+  rsvp        String    @default("NEEDS_ACTION") // NEEDS_ACTION | ACCEPTED | TENTATIVE | DECLINED
+  respondedAt DateTime?
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, email])
+}
+
+model OrganizerAccount {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  refreshToken String? // Google OAuth refresh token for offline RSVP sync
+  createdAt    DateTime @default(now())
+}
+
+model RsvpTokenLog {
+  id            String   @id @default(cuid())
+  token         String // signed per-(event,attendee) token — NOT unique:
+  // attendees may legitimately change their RSVP by clicking again,
+  // so the audit log records every click.
+  eventId       String
+  attendeeEmail String
+  action        String // yes | maybe | no
+  receivedAt    DateTime @default(now())
+
+  @@index([eventId, attendeeEmail])
+  @@index([token])
+}
