@@ -9,6 +9,7 @@
     "lint": "eslint",
     "verify:resend": "node scripts/verify-resend-rsvp.mjs",
     "db:deploy": "prisma migrate deploy",
+    "db:migrate:sqlite": "node scripts/migrate-sqlite-to-postgres.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
