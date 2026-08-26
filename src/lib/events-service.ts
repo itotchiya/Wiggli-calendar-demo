@@ -905,15 +905,12 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
     };
   });
 
-  // Gmail renders at most ONE invitation card per message, and when several
-  // invitation messages are chained into one Gmail conversation it renders
-  // the card only on the newest message. So each slot email is sent as its
-  // OWN message (no threadId/In-Reply-To/References chaining): every slot
-  // arrives as a separate inbox entry with a reliable native Yes/No/Maybe
-  // card. The per-slot subject suffix keeps the entries distinguishable in
-  // the list, and the small "choose one" note at the bottom of every email
-  // tells the recipient to answer Yes on their suitable slot and No on the
-  // rest — the organizer reads aggregate availability from the responses.
+  // One Gmail thread per attendee, ONE shared subject, N emails with native
+  // RSVP cards: the first email opens the conversation; each subsequent
+  // email joins it via Gmail's server-side threadId plus RFC chaining
+  // headers pointing at the DELIVERED Message-ID (Gmail regenerates authored
+  // ones). The single-subject rule is what collapses them into one inbox
+  // row; expanding shows every slot's Yes/No/Maybe card in sequence.
   for (const attendee of firstEvent.attendees) {
     const displayName = attendee.name ?? attendee.email;
     const drawerType = inputs[0]!.attendees.find((a) => a.email === attendee.email)?.type;
@@ -934,6 +931,13 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
           sequence: firstEvent.sequence,
         })
       : undefined;
+
+    // Thread state per attendee — seeded by whichever email sends first.
+    let thread = opts.emailThreads?.get(attendee.email);
+    if (!thread) {
+      thread = { rootMessageId: "", subject: resendSubject, references: [] };
+      opts.emailThreads?.set(attendee.email, thread);
+    }
 
     for (const [slotIndex, slotParsed] of parsedSlots.entries()) {
       const anchor = {
@@ -1001,18 +1005,32 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
             : {}),
         });
       } else {
-        // Preserve the existing Smart control path exactly: Gmail delivery,
-        // separate per-slot subjects, and no Resend dependency.
-        await sendInviteEmail(authClient, {
+        // Gmail delivery — ONE shared subject per attendee, chained into a
+        // single conversation via threadId + delivered-Message-ID references.
+        const sent = await sendInviteEmail(authClient, {
           from: organizerEmail,
           replyTo: organizerEmail,
           to: [attendee.email],
-          subject: `${subjectSeed} (Slot ${anchor.number} of ${slotCount})`,
+          subject: thread.subject,
           html,
           text,
           icsContent: buildRequestIcs(slotIcsInputs[slotIndex]!),
           icsFilename: "invite.ics",
+          ...(thread.rootMessageId
+            ? {
+                threadId: thread.threadId,
+                inReplyTo: thread.rootMessageId,
+                references: [...thread.references, thread.rootMessageId],
+              }
+            : {}),
         });
+        if (!thread.rootMessageId) {
+          // First slot email opens the thread — capture Gmail's server-side
+          // threadId and the DELIVERED RFC Message-ID for all follow-ups.
+          thread.rootMessageId = sent.rfcMessageId;
+          thread.threadId = sent.threadId;
+        }
+        thread.references.push(sent.rfcMessageId);
       }
     }
   }

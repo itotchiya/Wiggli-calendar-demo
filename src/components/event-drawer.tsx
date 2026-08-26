@@ -27,6 +27,7 @@ import {
   MessageSquareText,
   Monitor,
   Loader2,
+  PenLine,
   Plus,
   Search,
   Send,
@@ -2049,20 +2050,17 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                   </div>
 
                   {/* AI toolbar */}
-                  <div className="invite-toolbar" style={{ justifyContent: "space-between" }}>
+                  <div className="invite-toolbar">
                     <button
                       type="button"
                       className={`toolbar-btn ai-generate-btn ${aiBusy ? "busy" : ""}`}
                       onClick={() => void generateDrafts()}
                       disabled={aiBusy || !title.trim()}
-                      title={!title.trim() ? "Add a title first" : "Regenerate only the context paragraph"}
+                      title={!title.trim() ? "Add a title first" : "Rewrite the introduction while keeping the event details intact"}
                     >
-                      {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                      {aiBusy ? "Writing…" : draftedOnce ? "Regenerate context paragraph" : "Generate context paragraph"}
+                      {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <PenLine size={14} />}
+                      {aiBusy ? "Writing…" : draftedOnce ? "Rewrite introduction" : "Write introduction"}
                     </button>
-                    <span style={{ fontSize: 11, color: "#8da0b9" }}>
-                      Fixed structure · AI context only · variables resolved at send time
-                    </span>
                   </div>
 
                   {aiError && (
@@ -2113,7 +2111,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
 
                   {/* Variables available for THIS email (from the user's inputs) */}
                   <div className="invite-suggestions-bar">
-                    <span className="suggestions-label">Variables:</span>
+                    <span className="suggestions-label">Insert a placeholder</span>
                     {availableVariables.map((chip) => (
                       <button
                         type="button"
