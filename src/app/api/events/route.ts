@@ -15,7 +15,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    return NextResponse.json({ error: "Sign in required", code: "AUTH_REQUIRED" }, { status: 401 });
   }
   if (!isGoogleConfigured()) {
     return NextResponse.json(
@@ -24,7 +24,10 @@ export async function POST(req: Request) {
     );
   }
   if (!session.accessToken) {
-    return NextResponse.json({ error: "Missing Google access token — please sign in again." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Your Google session expired. Reconnect Google and try again.", code: "AUTH_EXPIRED" },
+      { status: 401 }
+    );
   }
 
   let body: unknown;

@@ -23,6 +23,7 @@ export type AttendeeDto = {
   id: string;
   email: string;
   name: string | null;
+  type: string | null;
   rsvp: RsvpStatus;
   respondedAt: string | null;
 };
@@ -32,8 +33,11 @@ export type EventDto = {
   googleEventId: string | null;
   iCalUID: string;
   summary: string;
+  eventType: string | null;
   description: string | null;
   location: string | null;
+  hangoutLink: string | null;
+  reminderMinutes: number | null;
   start: string;
   end: string;
   timezone: string;

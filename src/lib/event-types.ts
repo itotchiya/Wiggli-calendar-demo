@@ -9,25 +9,32 @@ export type EventTypeDefinition = {
 };
 
 export const defaultEventTypes: EventTypeDefinition[] = [
-  { id: "meeting", name: "Meeting", description: "A general meeting with internal or external attendees" },
-  { id: "screening-call", name: "Screening call", description: "An initial conversation to learn more about a candidate" },
-  { id: "interview", name: "Interview", description: "A formal interview to evaluate a candidate for a job" },
-  { id: "candidate-meeting", name: "Candidate meeting", description: "A non-interview discussion with a candidate" },
-  { id: "client-meeting", name: "Client meeting", description: "A general discussion with a client or contact" },
-  { id: "job-intake", name: "Job intake", description: "A meeting to discuss a job's requirements" },
-  { id: "follow-up", name: "Follow-up", description: "A discussion after a previous meeting" },
+  { id: "call", name: "Call", description: "A phone conversation to discuss, clarify, or follow up on a specific topic." },
+  { id: "interview", name: "Interview", description: "A structured conversation to evaluate a candidate's experience and suitability for a job opportunity." },
+  { id: "meeting", name: "Meeting", description: "A general discussion to share information, align on a topic, or agree on next steps." },
+  { id: "job-intake", name: "Job intake", description: "A discussion to gather requirements, responsibilities, expectations, and hiring needs for a job opening." },
 ];
 
-const STORAGE_KEY = "wiggli-event-types:v1";
+const STORAGE_KEY = "wiggli-event-types:v2";
+const LEGACY_STORAGE_KEY = "wiggli-event-types:v1";
 const CHANGE_EVENT = "wiggli-event-types-change";
+const LEGACY_DEFAULT_IDS = new Set([
+  "meeting",
+  "screening-call",
+  "interview",
+  "candidate-meeting",
+  "client-meeting",
+  "job-intake",
+  "follow-up",
+]);
 
 const cloneDefaults = () => defaultEventTypes.map((item) => ({ ...item }));
 
-function normalizeEventTypes(value: unknown): EventTypeDefinition[] {
-  if (!Array.isArray(value)) return cloneDefaults();
+function sanitizeEventTypes(value: unknown): EventTypeDefinition[] {
+  if (!Array.isArray(value)) return [];
   const seenIds = new Set<string>();
   const seenNames = new Set<string>();
-  const normalized = value.flatMap((item) => {
+  return value.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const candidate = item as Partial<EventTypeDefinition>;
     const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
@@ -39,14 +46,28 @@ function normalizeEventTypes(value: unknown): EventTypeDefinition[] {
     seenNames.add(normalizedName);
     return [{ id, name, description }];
   });
+}
+
+function normalizeEventTypes(value: unknown): EventTypeDefinition[] {
+  const normalized = sanitizeEventTypes(value);
   return normalized.length > 0 ? normalized : cloneDefaults();
+}
+
+function migrateLegacyEventTypes(value: unknown): EventTypeDefinition[] {
+  const customTypes = sanitizeEventTypes(value).filter((item) => !LEGACY_DEFAULT_IDS.has(item.id));
+  return normalizeEventTypes([...cloneDefaults(), ...customTypes]);
 }
 
 export function loadEventTypes(): EventTypeDefinition[] {
   if (typeof window === "undefined") return cloneDefaults();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? normalizeEventTypes(JSON.parse(raw)) : cloneDefaults();
+    if (raw) return normalizeEventTypes(JSON.parse(raw));
+    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacyRaw) return cloneDefaults();
+    const migrated = migrateLegacyEventTypes(JSON.parse(legacyRaw));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
     return cloneDefaults();
   }

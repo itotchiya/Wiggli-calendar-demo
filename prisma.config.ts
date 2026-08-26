@@ -9,6 +9,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Runtime can use a pooled URL; migrations should use a direct URL when
+    // the provider exposes both (Neon/Vercel Postgres, Supabase, etc.).
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });

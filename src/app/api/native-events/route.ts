@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { createGoogleEvent } from "@/lib/google/calendar";
 import { withFreshGoogleClient, AuthExpiredError } from "@/lib/google-auth";
 import { db } from "@/lib/prisma";
+import { slotNoticeText } from "@/lib/smart-email-template";
+import { eventTitleForSlot, type SmartEventSlot } from "@/lib/smart-event-schema";
 
 /**
  * NATIVE Google Calendar invitation flow (approach B):
@@ -13,15 +15,19 @@ import { db } from "@/lib/prisma";
  * responses sync via /api/sync as usual.
  *
  * POST { title, description?, location?, conference?, meetLink?,
- *        reminderMinutes?, date, start, end, timezone, attendees:[{email,name?}] }
+ *        reminderMinutes?, date, start, end, slots?, timezone,
+ *        attendees:[{email,name?}] }
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user?.email || !session.accessToken) {
-    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Sign in required", code: "AUTH_REQUIRED" }, { status: 401 });
   }
   if (!session.accessToken) {
-    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Your Google session expired. Reconnect Google and try again.", code: "AUTH_EXPIRED" },
+      { status: 401 }
+    );
   }
 
   let body: Record<string, unknown>;
@@ -39,79 +45,100 @@ export async function POST(req: Request) {
   const end = str("end");
   const timezone = str("timezone") || "UTC";
   const rawAttendees = Array.isArray(body.attendees) ? body.attendees : [];
+  const rawSlots = Array.isArray(body.slots) && body.slots.length > 0
+    ? body.slots
+    : [{ date, start, end }];
+  const slots = rawSlots.map((value) => {
+    if (!value || typeof value !== "object") return { date: "", start: "", end: "" };
+    const slot = value as { date?: unknown; start?: unknown; end?: unknown };
+    return {
+      date: typeof slot.date === "string" ? slot.date.trim() : "",
+      start: typeof slot.start === "string" ? slot.start.trim() : "",
+      end: typeof slot.end === "string" ? slot.end.trim() : "",
+    };
+  });
 
   if (!title) return NextResponse.json({ error: "Title is required." }, { status: 400 });
-  if (!date || !start || !end)
-    return NextResponse.json({ error: "date, start and end are required." }, { status: 400 });
+  if (slots.some((slot) => !/^\d{4}-\d{2}-\d{2}$/.test(slot.date) || !/^\d{2}:\d{2}$/.test(slot.start) || !/^\d{2}:\d{2}$/.test(slot.end) || slot.end <= slot.start))
+    return NextResponse.json({ error: "Each slot must have a valid date, start time, and end time." }, { status: 400 });
 
   const attendees = rawAttendees
-    .map((a) => a as { email?: unknown; name?: unknown })
+    .map((a) => a as { email?: unknown; name?: unknown; type?: unknown })
     .filter((a) => typeof a.email === "string" && /.+@.+\..+/.test(a.email))
     .map((a) => ({
       email: (a.email as string).toLowerCase(),
       name: typeof a.name === "string" ? a.name : undefined,
+      type: typeof a.type === "string" ? a.type : undefined,
     }));
   if (attendees.length === 0)
     return NextResponse.json({ error: "At least one valid attendee email is required." }, { status: 400 });
 
-  // Wall-clock → UTC using the same DST-correct helper as the main flow.
-  const { zonedWallClockToUtc } = await import("@/lib/datetime");
-  const startUtc = zonedWallClockToUtc(`${date}T${start}`, timezone);
-  const endUtc = zonedWallClockToUtc(`${date}T${end}`, timezone);
-  if (endUtc <= startUtc)
-    return NextResponse.json({ error: "End must be after start." }, { status: 400 });
-  if (startUtc.getTime() < Date.now() - 60_000)
-    return NextResponse.json({ error: "Start time must be in the future." }, { status: 400 });
-
   const organizerEmail = session.user.email.toLowerCase();
 
   try {
-    const result = await withFreshGoogleClient(session.accessToken, organizerEmail, (client) =>
-      createGoogleEvent(client.credentials.access_token ?? session.accessToken!, {
-        summary: title,
-        description: str("description") || undefined,
-        location:
-          typeof body.meetLink === "string" && body.meetLink
-            ? undefined
-            : str("location") || undefined,
-        startIso: startUtc.toISOString(),
-        endIso: endUtc.toISOString(),
-        timezone,
-        attendees,
-        conference: Boolean(body.conference),
-        reminderMinutes:
-          body.reminderMinutes == null ? null : Math.max(0, Number(body.reminderMinutes) || 0),
-        sendUpdates: "all", // ← Google emails its own native invitations
-      })
-    );
+    const { zonedWallClockToUtc } = await import("@/lib/datetime");
+    const smartSlots: SmartEventSlot[] = slots.map((slot) => ({ date: slot.date, startTime: slot.start, endTime: slot.end }));
+    const created = await withFreshGoogleClient(session.accessToken, organizerEmail, async (client) => {
+      const results: {
+        id: string;
+        googleEventId: string;
+        hangoutLink: string | null;
+        htmlLink: string | null;
+      }[] = [];
+      for (const [index, slot] of slots.entries()) {
+        const calendarTitle = eventTitleForSlot(title, index, slots.length);
+        const startUtc = zonedWallClockToUtc(`${slot.date}T${slot.start}`, timezone);
+        const endUtc = zonedWallClockToUtc(`${slot.date}T${slot.end}`, timezone);
+        if (endUtc <= startUtc) throw new Error("End must be after start.");
+        if (startUtc.getTime() < Date.now() - 60_000) throw new Error("Start time must be in the future.");
+        const notice = slotNoticeText(smartSlots, index);
+        const result = await createGoogleEvent(client.credentials.access_token ?? session.accessToken!, {
+          summary: calendarTitle,
+          description: [str("description"), notice].filter(Boolean).join("\n\n") || undefined,
+          location:
+            typeof body.meetLink === "string" && body.meetLink
+              ? undefined
+              : str("location") || undefined,
+          startIso: startUtc.toISOString(),
+          endIso: endUtc.toISOString(),
+          timezone,
+          attendees,
+          conference: Boolean(body.conference),
+          reminderMinutes:
+            body.reminderMinutes == null ? null : Math.max(0, Number(body.reminderMinutes) || 0),
+          sendUpdates: "all", // Google emails its own native invitations
+        });
 
-    // Persist locally so the events dashboard can track RSVPs for it too.
-    const event = await db.event.create({
-      data: {
-        googleEventId: result.id,
-        iCalUID: result.iCalUID,
-        summary: title,
-        description: str("description") || null,
-        location: result.hangoutLink ?? str("location") ?? null,
-        hangoutLink: result.hangoutLink,
-        reminderMinutes:
-          body.reminderMinutes == null ? null : Math.max(0, Number(body.reminderMinutes) || 0),
-        start: startUtc,
-        end: endUtc,
-        timezone,
-        organizerEmail,
-        sequence: 0,
-        attendees: { create: attendees.map((a) => ({ email: a.email, name: a.name })) },
-      },
-      include: { attendees: true },
+        const event = await db.event.create({
+          data: {
+            googleEventId: result.id,
+            iCalUID: result.iCalUID,
+            summary: calendarTitle,
+            eventType: str("eventType") || null,
+            description: [str("description"), notice].filter(Boolean).join("\n\n") || null,
+            location: result.hangoutLink ?? str("location") ?? null,
+            hangoutLink: result.hangoutLink,
+            reminderMinutes:
+              body.reminderMinutes == null ? null : Math.max(0, Number(body.reminderMinutes) || 0),
+            start: startUtc,
+            end: endUtc,
+            timezone,
+            organizerEmail,
+            sequence: 0,
+            attendees: { create: attendees.map((a) => ({ email: a.email, name: a.name, type: a.type })) },
+          },
+          include: { attendees: true },
+        });
+        results.push({ id: event.id, googleEventId: result.id, hangoutLink: result.hangoutLink, htmlLink: result.htmlLink });
+      }
+      return results;
     });
 
     return NextResponse.json(
       {
-        id: event.id,
-        googleEventId: result.id,
-        hangoutLink: result.hangoutLink,
-        htmlLink: result.htmlLink,
+        ...created[0],
+        events: created,
+        count: created.length,
         note: "Created with sendUpdates:'all' — Google sent native invitations to all attendees.",
       },
       { status: 201 }

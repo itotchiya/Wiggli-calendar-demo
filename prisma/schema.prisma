@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Event {
@@ -17,6 +17,7 @@ model Event {
   googleEventId  String? // Google Calendar event ID, set after events.insert
   iCalUID        String   @unique // shared between GCal event & our .ics attachment
   summary        String
+  eventType      String?
   description    String?
   location       String?
   start          DateTime
@@ -41,6 +42,7 @@ model Attendee {
   eventId     String
   email       String
   name        String?
+  type        String? // drawer attendee type: candidate | freelancer | contact | internal
   rsvp        String    @default("NEEDS_ACTION") // NEEDS_ACTION | ACCEPTED | TENTATIVE | DECLINED
   respondedAt DateTime?
 
@@ -50,10 +52,11 @@ model Attendee {
 }
 
 model OrganizerAccount {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  refreshToken String? // Google OAuth refresh token for offline RSVP sync
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  email         String   @unique
+  refreshToken  String? // Google OAuth refresh token for offline RSVP sync
+  calendarAlias String?  @unique // stable Resend inbound organizer address
+  createdAt     DateTime @default(now())
 }
 
 model RsvpTokenLog {
@@ -64,6 +67,7 @@ model RsvpTokenLog {
   eventId       String
   attendeeEmail String
   action        String // yes | maybe | no
+  dedupeKey     String?  @unique // inbound source key, e.g. gmail:<message-id>
   receivedAt    DateTime @default(now())
 
   @@index([eventId, attendeeEmail])

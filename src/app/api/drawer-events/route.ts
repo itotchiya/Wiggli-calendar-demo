@@ -1,29 +1,34 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isGoogleConfigured } from "@/lib/env";
-import { createEventAndInvite } from "@/lib/events-service";
+import {
+  createEventAndInvite,
+  createSmartMultiSlotEventsAndInvite,
+  parseCreateInput,
+  type InviteThreadState,
+} from "@/lib/events-service";
 import { withFreshGoogleClient, AuthExpiredError } from "@/lib/google-auth";
-import { parseCreateInput } from "@/lib/events-service";
-import type { AttendeeInput } from "@/types/event";
+import { eventTitleForSlot, parseSmartEventDocument } from "@/lib/smart-event-schema";
 
 /**
  * Backend glue for the prototype EventDrawer (port of Wiggli-prototype).
- * Receives the drawer's step-2 "Send invitation" payload:
- *   { title, description?, location?, date, start, end, timezone?,
- *     eventType?, attendees: [{ email, name? }] }
- * and runs the REAL pipeline: silent Google Calendar insert → branded
- * METHOD:REQUEST invite per attendee via the organizer's Gmail.
+ * Receives the drawer's reviewed Smart Event document, including one or more
+ * date/time slots, and runs the real pipeline once per slot: silent Google
+ * Calendar insert → branded METHOD:REQUEST invite per attendee.
  */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    return NextResponse.json({ error: "Sign in required", code: "AUTH_REQUIRED" }, { status: 401 });
   }
   if (!isGoogleConfigured()) {
     return NextResponse.json({ error: "Google OAuth is not configured." }, { status: 503 });
   }
   if (!session.accessToken) {
-    return NextResponse.json({ error: "Missing Google access token — please sign in again." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Your Google session expired. Reconnect Google and try again.", code: "AUTH_EXPIRED" },
+      { status: 401 }
+    );
   }
 
   let body: Record<string, unknown>;
@@ -33,92 +38,123 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Drawer sends a single occurrence: { date: "YYYY-MM-DD", start/end: "HH:mm" }
-  // in the prototype's UTC+2 convention. Convert to wall-clock + zone for the
-  // shared pipeline. The demo keeps the prototype's Europe-paris-style slot
-  // semantics by treating drawer times in the ORGANIZER'S selected zone — we use
-  // the browser-reported timezone passed through, defaulting to Europe/Paris.
-  const timezone = typeof body.timezone === "string" && body.timezone.trim() ? body.timezone.trim() : "Europe/Paris";
-  const date = String(body.date ?? "");
-  const start = String(body.start ?? "");
-  const end = String(body.end ?? "");
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) {
-    return NextResponse.json(
-      { error: "Expected fields: date (YYYY-MM-DD), start (HH:mm), end (HH:mm)." },
-      { status: 400 }
-    );
-  }
-
-  const rawAttendees = Array.isArray(body.attendees) ? body.attendees : [];
-  const seen = new Set<string>();
-  const attendees: AttendeeInput[] = [];
-  for (const a of rawAttendees as { email?: unknown; name?: unknown; type?: unknown }[]) {
-    const email = String(a?.email ?? "").trim().toLowerCase();
-    if (!email || seen.has(email)) continue;
-    seen.add(email);
-    const name = String(a?.name ?? "").trim();
-    // Keep the drawer attendee type — it selects which invitation template
-    // (candidate/contact/internal) this person receives.
-    const type = typeof a?.type === "string" && a.type.trim() ? a.type.trim() : undefined;
-    attendees.push({ email, ...(name ? { name } : {}), ...(type ? { type } : {}) });
-  }
-  if (attendees.length === 0) {
-    return NextResponse.json({ error: "At least one attendee is required." }, { status: 400 });
-  }
-
-  let input;
+  const organizerEmail = session.user.email!.toLowerCase();
+  let smartDocument;
   try {
-    input = parseCreateInput({
-      summary: body.title,
-      description: body.description,
-      location: typeof body.location === "string" && body.location.trim() ? body.location : undefined,
-      start: `${date}T${start}`,
-      end: `${date}T${end}`,
-      timezone,
-      attendees,
-      emailSubject: `Invitation: ${String(body.title ?? "Event")}`,
-      emailHtml: undefined,
-    });
+    smartDocument = parseSmartEventDocument(body.smartDocument);
+    smartDocument.organizer.email = organizerEmail;
+    smartDocument.organizer.fullName =
+      session.user.name?.trim() || smartDocument.organizer.fullName || organizerEmail.split("@")[0];
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
 
-  const organizerEmail = session.user.email!.toLowerCase();
+  const slotDocuments = smartDocument.event.slots.map((slot) => ({
+    ...smartDocument,
+    event: {
+      ...smartDocument.event,
+      date: slot.date,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+    },
+  }));
+  let inputs: ReturnType<typeof parseCreateInput>[] = [];
+  try {
+    inputs = slotDocuments.map((document, index) => parseCreateInput({
+      summary: eventTitleForSlot(document.event.title, index, slotDocuments.length),
+      description: document.event.description,
+      location:
+        document.event.location.type === "online" && document.event.location.provider === "google"
+          ? undefined
+          : document.event.location.value ?? undefined,
+      start: `${document.event.date}T${document.event.startTime}`,
+      end: `${document.event.date}T${document.event.endTime}`,
+      timezone: document.event.timezone,
+      attendees: document.attendees.map((attendee) => ({
+        email: attendee.email,
+        name: attendee.fullName,
+        type: attendee.type,
+      })),
+      emailSubject: `Invitation: ${document.event.title}`,
+    }));
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+  }
+
+  const linked = Object.fromEntries(
+    smartDocument.linkedTo.map((record) => [record.type.toLowerCase(), record.label])
+  );
+  const inviteMessages = Array.isArray(body.inviteMessages)
+    ? (body.inviteMessages as {
+        tab: "candidate" | "contact" | "internal";
+        subject?: string;
+        body?: string;
+        bodyHtml?: string;
+      }[]).filter((message) =>
+        message &&
+        ["candidate", "contact", "internal"].includes(message.tab) &&
+        Boolean(message.bodyHtml?.trim() || message.body?.trim())
+      )
+    : [];
+  const messageTabs = new Set(inviteMessages.map((message) => message.tab));
+  const missingAudience = smartDocument.audiences.find((audience) => !messageTabs.has(audience.type));
+  if (missingAudience) {
+    return NextResponse.json(
+      { error: `Missing reviewed ${missingAudience.type} invitation.` },
+      { status: 400 }
+    );
+  }
 
   try {
-    const dto = await withFreshGoogleClient(session.accessToken, organizerEmail, (client) =>
-      createEventAndInvite({
-        accessToken: client.credentials.access_token ?? session.accessToken!,
-        refreshToken: client.credentials.refresh_token ?? null,
-        organizerEmail,
-        input,
-        conference: Boolean(body.conference),
-        meetLink: typeof body.meetLink === "string" ? body.meetLink : null,
-        reminderMinutes:
-          body.reminderMinutes == null ? null : Math.max(0, Number(body.reminderMinutes) || 0),
-        eventType: typeof body.eventType === "string" ? body.eventType : undefined,
-        organizationName:
-          typeof body.organizationName === "string" ? body.organizationName : null,
-        linkedTitle: typeof body.linkedTitle === "string" ? body.linkedTitle : null,
-        linked:
-          body.linked && typeof body.linked === "object"
-            ? Object.fromEntries(
-                Object.entries(body.linked as Record<string, unknown>)
-                  .filter(([, v]) => typeof v === "string" && v.trim())
-                  .map(([k, v]) => [k, String(v).trim()])
-              )
-            : undefined,
-        inviteMessages: Array.isArray(body.inviteMessages)
-          ? (body.inviteMessages as {
-              tab: "candidate" | "contact" | "internal";
-              subject?: string;
-              body: string;
-            }[]).filter((m) => m && typeof m.body === "string" && m.body.trim())
-          : undefined,
-      })
-    );
-    return NextResponse.json(dto, { status: 201 });
+    const dtos = await withFreshGoogleClient(session.accessToken, organizerEmail, async (client) => {
+      // Multi-slot: N emails (one per slot, each with its own single-VEVENT
+      // ICS) chained into ONE Gmail thread — one inbox row in collapsed
+      // view, all N native Yes/No/Maybe cards stacked when expanded.
+      if (inputs.length > 1) {
+        const emailThreads = new Map<string, InviteThreadState>();
+        return createSmartMultiSlotEventsAndInvite({
+          accessToken: client.credentials.access_token ?? session.accessToken!,
+          refreshToken: client.credentials.refresh_token ?? null,
+          organizerEmail,
+          inputs,
+          slotDocuments,
+          baseDocument: smartDocument,
+          conference:
+            smartDocument.event.location.type === "online" && smartDocument.event.location.provider === "google",
+          reminderMinutes: smartDocument.event.reminderMinutes ?? null,
+          eventType: smartDocument.event.type.name,
+          organizationName: linked.organization ?? null,
+          linkedTitle: linked.job ?? linked.opportunity ?? null,
+          linked,
+          inviteMessages,
+          emailThreads,
+          googleSendUpdates: "none",
+        });
+      }
+      const created: Awaited<ReturnType<typeof createEventAndInvite>>[] = [];
+      const emailThreads = new Map<string, InviteThreadState>();
+      for (const [index, input] of inputs.entries()) {
+        created.push(await createEventAndInvite({
+          accessToken: client.credentials.access_token ?? session.accessToken!,
+          refreshToken: client.credentials.refresh_token ?? null,
+          organizerEmail,
+          input,
+          conference:
+            smartDocument.event.location.type === "online" && smartDocument.event.location.provider === "google",
+          meetLink: null,
+          reminderMinutes: smartDocument.event.reminderMinutes ?? null,
+          eventType: smartDocument.event.type.name,
+          organizationName: linked.organization ?? null,
+          linkedTitle: linked.job ?? linked.opportunity ?? null,
+          smartDocument: slotDocuments[index],
+          linked,
+          inviteMessages,
+          emailThreads,
+        }));
+      }
+      return created;
+    });
+    return NextResponse.json({ ...dtos[0], events: dtos, count: dtos.length }, { status: 201 });
   } catch (err) {
     if (err instanceof AuthExpiredError) {
       return NextResponse.json({ error: err.message, code: "AUTH_EXPIRED" }, { status: 401 });

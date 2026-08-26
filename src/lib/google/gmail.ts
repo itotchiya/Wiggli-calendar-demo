@@ -17,6 +17,16 @@ export type InviteEmailInput = {
   icsContent: string; // full METHOD:REQUEST calendar body
   icsFilename?: string;
   replyTo?: string;
+  /** Gmail thread to append this message to after the first slot invitation. */
+  threadId?: string;
+  /** RFC Message-ID for this MIME message and reply threading headers. */
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string[];
+  /** Optional provider idempotency header (used by Resend SMTP retries). */
+  idempotencyKey?: string;
+  /** SMTP raw messages need an explicit Date; Gmail API supplies its own. */
+  date?: Date;
   /** Small brand icons embedded into the HTML via cid: references. */
   inlineImages?: InlineImage[];
 };
@@ -37,20 +47,26 @@ function encodedSubject(subject: string): string {
 }
 
 /**
- * Compose the classic invitation MIME structure that maximizes compatibility:
+ * Compose the invitation MIME in the APPLE-CANONICAL structure:
  *
  * multipart/mixed
- * ├── multipart/related              ← HTML + its inline brand images
- * │   ├── multipart/alternative
- * │   │   ├── text/plain
- * │   │   └── text/html              ← branded/custom body (<img src="cid:…">)
- * │   └── image/png ×N               ← Content-ID icons, disposition inline
- * ├── text/calendar; method=REQUEST  ← Apple Mail inline RSVP
- * └── application/ics (attachment)   ← Gmail / Outlook "Add to calendar"
+ * ├── multipart/alternative
+ * │   ├── text/plain
+ * │   ├── text/calendar; method=REQUEST   ← inline iMIP part (Apple Mail's
+ * │   │                                      parser only descends into
+ * │   │                                      alternative groups; an extra
+ * │   │                                      related wrapper makes it miss
+ * │   │                                      the invite and fall back to
+ * │   │                                      Siri "found an event" detection)
+ * │   └── text/html                       ← branded/custom body
+ * └── application/ics                     ← invite.ics attachment (Gmail /
+ *                                            Outlook "Add to calendar")
+ *
+ * No multipart/related layer: cid: embedded images are incompatible with the
+ * layout Apple's iMIP recognizer requires, so emails stay image-free.
  */
 export function buildInviteMime(input: InviteEmailInput): string {
   const altBoundary = `=_wiggli_alt_${randomUUID()}`;
-  const relBoundary = `=_wiggli_rel_${randomUUID()}`;
   const mixedBoundary = `=_wiggli_mixed_${randomUUID()}`;
   const filename = input.icsFilename ?? "invite.ics";
 
@@ -70,51 +86,30 @@ export function buildInviteMime(input: InviteEmailInput): string {
     foldedB64(input.html),
   ].join("\r\n");
 
-  const alternativePart = [
-    textPart,
-    htmlPart,
-    "--" + altBoundary + "--",
-  ].join("\r\n");
-
-  const imageParts = (input.inlineImages ?? []).map((img) =>
-    [
-      `--${relBoundary}`,
-      `Content-Type: ${img.contentType}; name="${img.filename}"`,
-      `Content-Disposition: inline; filename="${img.filename}"`,
-      `Content-ID: <${img.cid}>`,
-      "Content-Transfer-Encoding: base64",
-      "",
-      foldedB64(img.data.toString("base64")),
-    ].join("\r\n")
-  );
-
-  // related: alternative root + inline leaf images
-  const relatedPart = [
-    `--${mixedBoundary}`,
-    `Content-Type: multipart/related; boundary="${relBoundary}"; type="text/html"`,
-    "",
-    [
-      `--${relBoundary}`,
-      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
-      "",
-      alternativePart,
-    ].join("\r\n"),
-    ...imageParts,
-    "--" + relBoundary + "--",
-  ].join("\r\n");
-
-  const calendarInlinePart = [
-    `--${mixedBoundary}`,
-    'Content-Type: text/calendar; method=REQUEST; charset="UTF-8"',
-    `Content-Disposition: inline; filename="${filename}"`,
+  // RFC 6047 §2: the METHOD parameter on the calendar body MUST match the
+  // VCALENDAR METHOD — Apple checks this pair before engaging its RSVP UI.
+  const calendarPart = [
+    `--${altBoundary}`,
+    'Content-Type: text/calendar; method=REQUEST; charset="UTF-8"; component="VEVENT"; name="' + filename + '"',
+    "Content-Disposition: inline; filename=\"" + filename + "\"",
     "Content-Transfer-Encoding: base64",
     "",
     foldedB64(input.icsContent),
   ].join("\r\n");
 
+  // Order inside the alternative group matters for some pickers, but every
+  // part being siblings in ONE alternative group is what Mail requires.
+  const alternativePart = [
+    `--${mixedBoundary}`,
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    "",
+    [textPart, calendarPart, htmlPart, "--" + altBoundary + "--"].join("\r\n"),
+  ].join("\r\n");
+
   const icsAttachmentPart = [
     `--${mixedBoundary}`,
     'Content-Type: application/ics; name="' + filename + '"',
+    "Content-Class: urn:content-classes:calendarmessage",
     `Content-Disposition: attachment; filename="${filename}"`,
     "Content-Transfer-Encoding: base64",
     "",
@@ -125,16 +120,21 @@ export function buildInviteMime(input: InviteEmailInput): string {
     `From: ${input.from}`,
     `To: ${input.to.join(", ")}`,
     `Subject: ${encodedSubject(input.subject)}`,
+    `Message-ID: ${input.messageId ?? `<wiggli-${randomUUID()}@calendar.wiggli.local>`}`,
+    ...(input.inReplyTo ? [`In-Reply-To: ${input.inReplyTo}`] : []),
+    ...(input.references?.length ? [`References: ${input.references.join(" ")}`] : []),
     ...(input.replyTo ? [`Reply-To: ${input.replyTo}`] : []),
+    ...(input.date ? [`Date: ${input.date.toUTCString()}`] : []),
+    ...(input.idempotencyKey ? [`Resend-Idempotency-Key: ${input.idempotencyKey}`] : []),
     "MIME-Version: 1.0",
+    "Content-Class: urn:content-classes:calendarmessage",
     `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
   ];
 
   const mime = [
     headers.join("\r\n"),
     "",
-    relatedPart,
-    calendarInlinePart,
+    alternativePart,
     icsAttachmentPart,
     `--${mixedBoundary}--`,
   ].join("\r\n");
@@ -146,14 +146,16 @@ export function buildInviteMime(input: InviteEmailInput): string {
 export async function sendInviteEmail(
   auth: OAuth2Client,
   input: InviteEmailInput
-): Promise<{ messageId: string; threadId?: string }> {
+): Promise<{ messageId: string; rfcMessageId: string; threadId?: string }> {
   const { google } = await import("googleapis");
   const gmail = google.gmail({ version: "v1", auth });
-  const raw = buildInviteMime(input);
+  const rfcMessageId = input.messageId ?? `<wiggli-${randomUUID()}@calendar.wiggli.local>`;
+  const raw = buildInviteMime({ ...input, messageId: rfcMessageId });
 
   const response = await gmail.users.messages.send({
     userId: "me",
     requestBody: {
+      ...(input.threadId ? { threadId: input.threadId } : {}),
       // base64url per Gmail API requirement
       raw: Buffer.from(raw, "utf8")
         .toString("base64")
@@ -163,8 +165,28 @@ export async function sendInviteEmail(
     },
   });
 
+  let deliveredRfcMessageId = rfcMessageId;
+  // Gmail REGENERATES the Message-ID of outgoing messages (our custom
+  // <wiggli-…@calendar.wiggli.local> never survives delivery), so reply
+  // chaining must use Gmail's own RFC id. Read it back right after sending.
+  try {
+    const meta = await gmail.users.messages.get({
+      userId: "me",
+      id: response.data.id!,
+      format: "metadata",
+      metadataHeaders: ["Message-ID"],
+    });
+    const hdr = meta.data.payload?.headers?.find(
+      (h) => h.name?.toLowerCase() === "message-id"
+    );
+    if (hdr?.value) deliveredRfcMessageId = hdr.value;
+  } catch {
+    // fall back to the id we asked for
+  }
+
   return {
     messageId: response.data.id ?? "",
+    rfcMessageId: deliveredRfcMessageId,
     threadId: response.data.threadId ?? undefined,
   };
 }

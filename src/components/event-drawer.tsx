@@ -4,10 +4,10 @@ import {
   AlarmClock,
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
-  CircleHelp,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -26,7 +26,6 @@ import {
   MapPin,
   MessageSquareText,
   Monitor,
-  Phone,
   Loader2,
   Plus,
   Search,
@@ -39,11 +38,21 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { showToast } from "@/components/toaster";
-import { RichBodyEditor, insertIntoActiveEditor, htmlWithVarTokens } from "@/components/rich-body-editor";
+import { RichBodyEditor, insertIntoActiveEditor, htmlWithVarTokens, replaceSmartContextBlock } from "@/components/rich-body-editor";
 import { INVITE_VARIABLES } from "@/lib/invite-variables";
+import { notifyIfGoogleSessionExpired } from "@/lib/google-session-client";
+import { buildSmartInvitationHtml } from "@/lib/smart-email-template";
+import {
+  buildSmartAudiences,
+  LINKED_VARIABLE_BY_TYPE,
+  type SmartEventDocument,
+  type SmartEventSlot,
+  type SmartLinkedRecord,
+} from "@/lib/smart-event-schema";
 
 import { useEventTypes } from "@/lib/event-types";
 import {
@@ -52,6 +61,8 @@ import {
   formatCompactTime,
   getNextQuarterSlot,
   getTodayUtcPlusTwo,
+  formatMonthYear,
+  formatPickerLabel,
   parseDateKey,
 } from "@/lib/datetime-proto";
 
@@ -149,14 +160,18 @@ const TEST_EMAILS = [
   "luxqoox@gmail.com",
   "must.boufous@gmail.com",
   "must-boufous@outlook.com",
+  "mustapha@wiggli.io",
 ] as const;
+
+const INTERNAL_TEST_EMAILS = ["luxqoox@gmail.com", "mustapha@wiggli.io"] as const;
 
 const randFrom = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 const attendeeDirectory: Record<AttendeeType, AttendeePerson[]> = {
   candidate: [
     ["linksomoney", "Links Omoney", randFrom(TEST_EMAILS)],
-    ["luxqoox-candidate", "Lux Qoox", randFrom(TEST_EMAILS)],
+    // Keep one stable Outlook recipient available for calendar sync testing.
+    ["luxqoox-candidate", "Lux Qoox", "must-boufous@outlook.com"],
     ["ava-thompson", "Ava Thompson", randFrom(TEST_EMAILS)],
     ["ethan-patel", "Ethan Patel", randFrom(TEST_EMAILS)],
     ["sofia-morales", "Sofia Morales", randFrom(TEST_EMAILS)],
@@ -187,15 +202,15 @@ const attendeeDirectory: Record<AttendeeType, AttendeePerson[]> = {
     ["amelie-laurent", "Amelie Laurent", "linksomoney@gmail.com"],
   ].map(([id, name, email], index) => ({ id, name, email, type: "contact" as const, avatar: `/avatars/avatar-${index + 16}.webp`, organizations: contactOrganizations[id] })),
   internal: [
-    ["must-boufous", "Mustapha Boufous", "luxqoox@gmail.com"],
-    ["sarah-jenkins", "Sarah Jenkins", "luxqoox@gmail.com"],
-    ["david-park", "David Park", "luxqoox@gmail.com"],
-    ["emily-carter", "Emily Carter", "luxqoox@gmail.com"],
-    ["marcus-johnson", "Marcus Johnson", "luxqoox@gmail.com"],
-    ["aisha-patel", "Aisha Patel", "luxqoox@gmail.com"],
-    ["liam-obrien", "Liam O'Brien", "luxqoox@gmail.com"],
-    ["yasmine-bennis", "Yasmine Bennis", "luxqoox@gmail.com"],
-    ["noah-williams", "Noah Williams", "luxqoox@gmail.com"],
+    ["must-boufous", "Mustapha Boufous", randFrom(INTERNAL_TEST_EMAILS)],
+    ["sarah-jenkins", "Sarah Jenkins", randFrom(INTERNAL_TEST_EMAILS)],
+    ["david-park", "David Park", randFrom(INTERNAL_TEST_EMAILS)],
+    ["emily-carter", "Emily Carter", randFrom(INTERNAL_TEST_EMAILS)],
+    ["marcus-johnson", "Marcus Johnson", randFrom(INTERNAL_TEST_EMAILS)],
+    ["aisha-patel", "Aisha Patel", randFrom(INTERNAL_TEST_EMAILS)],
+    ["liam-obrien", "Liam O'Brien", randFrom(INTERNAL_TEST_EMAILS)],
+    ["yasmine-bennis", "Yasmine Bennis", randFrom(INTERNAL_TEST_EMAILS)],
+    ["noah-williams", "Noah Williams", randFrom(INTERNAL_TEST_EMAILS)],
   ].map(([id, name, email], index) => ({ id, name, email, type: "internal" as const, avatar: `/avatars/avatar-${((index + 22) % 24) + 1}.webp`, schedules: internalSchedules[index] })),
 };
 
@@ -220,18 +235,137 @@ function dateTimeStamp(date: string, time: string) {
   return parseDateKey(date).getTime() + timeToMinutes(time) * 60_000;
 }
 
+function formatMonthDay(date: Date) {
+  return new Intl.DateTimeFormat("en", { month: "long", day: "numeric", timeZone: "UTC" }).format(date);
+}
+
 function minimumTimeForDate(date: string) {
   const next = getNextQuarterSlot();
   return date === next.date ? formatCompactTime(next.hour, next.minute) : "00:00";
 }
 
-function DrawerDateField({ value, label, min, onChange }: { value: string; label: string; min: string; onChange: (value: string) => void }) {
-  return <input className="drawer-date-field" type="date" aria-label={label} min={min} value={value} onInput={(event) => { const next = event.currentTarget.value; if (next && next < min) { event.currentTarget.value = value; return; } onChange(next); }} onChange={() => undefined} />;
+function DrawerTimeField({ value, label, min = "00:00", max = "23:45", onChange }: { value: string; label: string; min?: string; max?: string; onChange: (value: string) => void }) {
+  const choices = Array.from({ length: 96 }, (_, index) => minutesToTime(index * 15)).filter((time) => time >= min && time <= max);
+  return <span className="drawer-time-select"><select className="drawer-time-field" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>{choices.map((time) => <option value={time} key={time}>{time}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></span>;
 }
 
-function DrawerTimeField({ value, label, min = "00:00", onChange }: { value: string; label: string; min?: string; onChange: (value: string) => void }) {
-  const choices = Array.from({ length: 96 }, (_, index) => minutesToTime(index * 15)).filter((time) => time >= min);
-  return <span className="drawer-time-select"><select className="drawer-time-field" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>{choices.map((time) => <option value={time} key={time}>{time}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></span>;
+function MultipleDatePicker({ value, minDate, onChange }: { value: TimedDate[]; minDate: string; onChange: (value: TimedDate[]) => void }) {
+  const [visibleMonth, setVisibleMonth] = useState(() => parseDateKey(value[0]?.date || minDate));
+  const [activeDate, setActiveDate] = useState(value[0]?.date || minDate);
+  const days = useMemo(() => {
+    const first = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth(), 1));
+    const mondayOffset = (first.getUTCDay() + 6) % 7;
+    return Array.from({ length: 42 }, (_, index) => addDays(first, index - mondayOffset));
+  }, [visibleMonth]);
+  const sortedSlots = useMemo(
+    () => [...value].sort((a, b) => dateTimeStamp(a.date, a.start) - dateTimeStamp(b.date, b.start)),
+    [value]
+  );
+  const selectedDates = useMemo(() => new Set(sortedSlots.map((slot) => slot.date)), [sortedSlots]);
+  const groupedSlots = useMemo(() => {
+    const groups = new globalThis.Map<string, TimedDate[]>();
+    for (const slot of sortedSlots) groups.set(slot.date, [...(groups.get(slot.date) ?? []), slot]);
+    return [...groups.entries()];
+  }, [sortedSlots]);
+
+  const endAfter = (start: string, end: string) => {
+    const minimum = Math.min(timeToMinutes(start) + 15, 23 * 60 + 45);
+    return end > start && timeToMinutes(end) >= minimum ? end : minutesToTime(minimum);
+  };
+
+  const updateSlot = (index: number, patch: Partial<TimedDate>) => {
+    onChange(sortedSlots.map((slot, slotIndex) => {
+      if (slotIndex !== index) return slot;
+      const next = { ...slot, ...patch };
+      return patch.start ? { ...next, end: endAfter(next.start, next.end) } : next;
+    }));
+  };
+
+  const addSlot = (date: string) => {
+    const existing = sortedSlots.filter((slot) => slot.date === date);
+    const template = existing.at(-1) ?? sortedSlots[0];
+    const start = template ? minutesToTime(timeToMinutes(template.end) + 15) : minimumTimeForDate(date);
+    if (timeToMinutes(start) > 23 * 60 + 30) return;
+    const end = minutesToTime(timeToMinutes(start) + 15);
+    setActiveDate(date);
+    onChange([...sortedSlots, { date, start, end }].sort((a, b) => dateTimeStamp(a.date, a.start) - dateTimeStamp(b.date, b.start)));
+  };
+
+  const selectDate = (date: string) => {
+    if (date < minDate) return;
+    setActiveDate(date);
+    if (selectedDates.has(date)) {
+      const next = sortedSlots.filter((slot) => slot.date !== date);
+      onChange(next);
+      setActiveDate(next[0]?.date || minDate);
+      return;
+    }
+    const template = sortedSlots[0];
+    const start = date === minDate
+      ? (template?.start && template.start >= minimumTimeForDate(date) ? template.start : minimumTimeForDate(date))
+      : template?.start ?? "09:00";
+    onChange([...sortedSlots, { date, start, end: endAfter(start, template?.end ?? minutesToTime(timeToMinutes(start) + 15)) }].sort((a, b) => dateTimeStamp(a.date, a.start) - dateTimeStamp(b.date, b.start)));
+  };
+
+  const removeSlot = (slot: TimedDate) => {
+    const next = sortedSlots.filter((candidate) => candidate !== slot);
+    onChange(next);
+    if (activeDate === slot.date && !next.some((candidate) => candidate.date === slot.date)) {
+      setActiveDate(next[0]?.date || minDate);
+    }
+  };
+
+  const moveMonth = (amount: number) => {
+    setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + amount, 1)));
+  };
+
+  return (
+    <div className="date-mode-card multiple-date-card">
+      <div className="drawer-mini-calendar">
+        <div className="drawer-mini-heading">
+          <button type="button" onClick={() => moveMonth(-1)} aria-label="Previous month"><ChevronLeft size={14} /></button>
+          <strong>{formatMonthYear(visibleMonth)}</strong>
+          <button type="button" onClick={() => moveMonth(1)} aria-label="Next month"><ChevronRight size={14} /></button>
+        </div>
+        <div className="drawer-mini-weekdays">{["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
+        <div className="drawer-mini-days">
+          {days.map((day) => {
+            const key = dateKey(day);
+            const outside = day.getUTCMonth() !== visibleMonth.getUTCMonth();
+            const past = key < minDate;
+            if (outside) return <span key={key} aria-hidden="true" />;
+            return <button type="button" key={key} className={`${selectedDates.has(key) ? "selected" : ""} ${key === minDate ? "today" : ""} ${past ? "past" : ""}`} disabled={past} onClick={() => selectDate(key)} aria-label={formatPickerLabel(day)} aria-pressed={selectedDates.has(key)}>{day.getUTCDate()}</button>;
+          })}
+        </div>
+      </div>
+      <div className="multiple-time-list">
+        <div className="multiple-time-toolbar">
+          <span><Clock3 size={15} /> Select time</span>
+          <button type="button" onClick={() => undefined}><Sparkles size={13} /> Find best Times</button>
+        </div>
+        {groupedSlots.length === 0 ? <p className="multiple-empty">Select one or more days to add available time slots.</p> : groupedSlots.map(([date, slots]) => (
+          <div className="multiple-time-group" key={date} data-active={activeDate === date || undefined}>
+            <div className="multiple-time-heading">
+              <span>{formatMonthDay(parseDateKey(date))}</span>
+            </div>
+            {slots.map((slot, groupIndex) => {
+              const index = sortedSlots.indexOf(slot);
+              return <div className="multiple-time-row" key={`${date}-${groupIndex}`}>
+                <div>
+                  <DrawerTimeField value={slot.start} min={minimumTimeForDate(date)} max="23:30" label={`Start time for ${formatMonthDay(parseDateKey(date))}`} onChange={(start) => updateSlot(index, { start })} />
+                  <span>–</span>
+                  <DrawerTimeField value={slot.end} min={minutesToTime(timeToMinutes(slot.start) + 15)} label={`End time for ${formatMonthDay(parseDateKey(date))}`} onChange={(end) => updateSlot(index, { end })} />
+                  {groupIndex === 0
+                    ? <button type="button" className="add-time-slot" onClick={() => addSlot(date)} aria-label={`Add another time on ${formatMonthDay(parseDateKey(date))}`}><Plus size={17} /></button>
+                    : <button type="button" className="remove-time-slot" onClick={() => removeSlot(slot)} aria-label={`Remove slot ${groupIndex + 1} on ${formatMonthDay(parseDateKey(date))}`}><X size={16} /></button>}
+                </div>
+              </div>;
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function AttendeeAvatar({ name, avatar, organizer = false, size = 32 }: { name: string; avatar?: string; organizer?: boolean; size?: number }) {
@@ -1103,7 +1237,10 @@ type EventMeta = {
   linkedRecords?: LinkedRecord[];
 };
 
-export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, initialContact, editingEvent, rescheduleDate, fixedEventType, fixedContext, initialLinkedRecords, nativeMode = false }: { open: boolean; onClose: () => void; slot: { date: string; hour: number; minute: number }; onCreate: (title: string, occurrences: TimedDate[], meta?: EventMeta) => void; initialCandidate?: DrawerCandidate; initialContact?: DrawerContact; editingEvent?: { id: number; title: string; date: string; endDate?: string; hour: number; minute: number; endHour: number; endMinute: number; eventType?: string; description?: string; storedAttendees?: { id: string; name: string; email: string; type: string; avatar: string; links?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string }[]; organizations?: string[]; schedules?: { status: string; date: string; time?: string }[]; locked?: boolean }[]; storedOrganization?: { id: string; name: string; initials: string; relationship: string } | null; storedContext?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string } | null; storedLocation?: LocationSnapshot | null } | null; rescheduleDate?: string | null; fixedEventType?: string; fixedContext?: LinkedContext; allowedEventTypes?: string[]; initialLinkedRecords?: LinkedRecord[]; nativeMode?: boolean }) {
+export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, initialContact, editingEvent, rescheduleDate, fixedEventType, fixedContext, initialLinkedRecords, mode = "smart" }: { open: boolean; onClose: () => void; slot: { date: string; hour: number; minute: number }; onCreate: (title: string, occurrences: TimedDate[], meta?: EventMeta) => void; initialCandidate?: DrawerCandidate; initialContact?: DrawerContact; editingEvent?: { id: number; title: string; date: string; endDate?: string; hour: number; minute: number; endHour: number; endMinute: number; eventType?: string; description?: string; storedAttendees?: { id: string; name: string; email: string; type: string; avatar: string; links?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string }[]; organizations?: string[]; schedules?: { status: string; date: string; time?: string }[]; locked?: boolean }[]; storedOrganization?: { id: string; name: string; initials: string; relationship: string } | null; storedContext?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string } | null; storedLocation?: LocationSnapshot | null } | null; rescheduleDate?: string | null; fixedEventType?: string; fixedContext?: LinkedContext; allowedEventTypes?: string[]; initialLinkedRecords?: LinkedRecord[]; mode?: "smart" | "resend-rsvp" | "native" }) {
+  const { data: session } = useSession();
+  const nativeMode = mode === "native";
+  const resendRsvpMode = mode === "resend-rsvp";
   const [configuredEventTypes] = useEventTypes();
   const configuredEventTypeNames = useMemo(() => configuredEventTypes.map((type) => type.name), [configuredEventTypes]);
   const [drawerStep, setDrawerStep] = useState<1 | 2>(1);
@@ -1112,11 +1249,10 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
   const [reminderValue, setReminderValue] = useState("15");
   const [reminderUnit, setReminderUnit] = useState<ReminderUnit>("minutes");
   const [reminderMenuOpen, setReminderMenuOpen] = useState(false);
-  const [startDate, setStartDate] = useState(slot.date || dateKey(getTodayUtcPlusTwo()));
-  const [startTime, setStartTime] = useState(() => formatCompactTime(slot.hour, slot.minute));
-  const [endTime, setEndTime] = useState(
-    () => addMinutesToDateTime(slot.date || dateKey(getTodayUtcPlusTwo()), formatCompactTime(slot.hour, slot.minute), 15).time
-  );
+  const initialDate = slot.date || dateKey(getTodayUtcPlusTwo());
+  const initialStartTime = formatCompactTime(slot.hour, slot.minute);
+  const initialEndTime = addMinutesToDateTime(initialDate, initialStartTime, 15).time;
+  const [occurrences, setOccurrences] = useState<TimedDate[]>([{ date: initialDate, start: initialStartTime, end: initialEndTime }]);
   const [selectedAttendees, setSelectedAttendees] = useState<AttendeePerson[]>([]);
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [selectedContext, setSelectedContext] = useState<LinkedContext | null>(null);
@@ -1133,7 +1269,6 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
   const [selectedEventType, setEventType] = useState(fixedEventType ?? editingEvent?.eventType ?? configuredEventTypeNames[0] ?? "Meeting");
   const [eventTypeError, setEventTypeError] = useState(false);
   const [eventTypeMenuOpen, setEventTypeMenuOpen] = useState(false);
-  const [eventTypeHelpOpen, setEventTypeHelpOpen] = useState(false);
   const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
   const [sending, setSending] = useState(false);
 
@@ -1144,35 +1279,35 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
 
   const defaultEmailSubjects: Record<"candidate" | "contact" | "internal", string> = {
-    candidate: "Invitation: [Event.Type] — [Event.Title]",
-    contact: "Invitation: [Event.Type] — [Event.Title]",
-    internal: "[Event.Date]: [Event.Title]",
+    candidate: "Invitation: [Event.Title]",
+    contact: "Invitation: [Event.Title]",
+    internal: "Invitation: [Event.Title]",
   };
 
   const defaultEmailBodies: Record<"candidate" | "contact" | "internal", string> = {
-    candidate: `Hello [Candidate.First_name],\n\nWe have scheduled a [Event.Type] for you: [Event.Title].\n\nDate: [Event.Date]\nTime: [Event.Start_time] to [Event.End_time]\n\nAll the details are in the calendar invitation — please respond with Yes, Maybe or No.\n\nBest regards,\n[Organizer.Name]`,
-    contact: `Hello [Contact.First_name],\n\nI would like to invite you to a [Event.Type]: [Event.Title].\n\nDate: [Event.Date]\nTime: [Event.Start_time] to [Event.End_time]\n\nAll the details are in the calendar invitation — please respond with Yes, Maybe or No.\n\nBest regards,\n[Organizer.Name]`,
-    internal: `Hello [Internal.First_name],\n\nYou are scheduled to take part in a [Event.Type]: [Event.Title].\n\nDate: [Event.Date]\nTime: [Event.Start_time] to [Event.End_time]\n\nAll the details are in the calendar invitation — please respond with Yes, Maybe or No.\n\n[Organizer.Name]`,
+    candidate: "",
+    contact: "",
+    internal: "",
   };
 
   const [emailSubjects, setEmailSubjects] = useState(defaultEmailSubjects);
   const [emailBodies, setEmailBodies] = useState(defaultEmailBodies);
+  const [smartDocument, setSmartDocument] = useState<SmartEventDocument | null>(null);
   // AI drafting state
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [revisionOpen, setRevisionOpen] = useState(false);
-  const [revisionText, setRevisionText] = useState("");
   const [draftedOnce, setDraftedOnce] = useState(false);
 
   const reminderRef = useRef<HTMLDivElement>(null);
   const eventTypeRef = useRef<HTMLDivElement>(null);
   const todayKey = dateKey(getTodayUtcPlusTwo());
+  const startDate = occurrences[0]?.date ?? "";
   const selectedTalent = selectedAttendees.find((person) => person.type === "candidate" || person.type === "freelancer");
   const selectedContact = selectedAttendees.find((person) => person.type === "contact");
   const selectedInternals = selectedAttendees.filter((person) => person.type === "internal");
 
-  const dateMissing = !startDate;
-  const isRescheduleSameDate = Boolean(rescheduleDate && startDate === rescheduleDate);
+  const dateMissing = occurrences.length === 0 || occurrences.some((occurrence) => !occurrence.date || !occurrence.start || !occurrence.end);
+  const isRescheduleSameDate = Boolean(rescheduleDate && occurrences.some((occurrence) => occurrence.date === rescheduleDate));
 
   useEffect(() => {
     if (fixedContext) {
@@ -1327,42 +1462,13 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
     setSelectedContext(links.length === 1 ? links[0] : null);
   };
 
-  /** Ensure end stays at least 15 min after start (same-day, quarter steps). */
-  const endAfterStart = (start: string, proposedEnd: string) => {
-    const minimumEnd = minutesToTime(timeToMinutes(start) + 15);
-    return proposedEnd <= start || proposedEnd < minimumEnd ? minimumEnd : proposedEnd;
-  };
-
-  const changeStartDate = (value: string) => {
-    if (!value || value < todayKey) return;
-    const minimum = minimumTimeForDate(value);
-    const nextStartTime = startTime < minimum ? minimum : startTime;
-    setStartDate(value);
-    setStartTime(nextStartTime);
-    setEndTime((current) => endAfterStart(nextStartTime, current));
-  };
-
-  const changeStartTime = (value: string) => {
-    if (!value) return;
-    const minimum = minimumTimeForDate(startDate);
-    const nextStartTime = value < minimum ? minimum : value;
-    setStartTime(nextStartTime);
-    setEndTime((current) => endAfterStart(nextStartTime, current));
-  };
-
-  const changeEndTime = (value: string) => {
-    if (!value) return;
-    setEndTime(endAfterStart(startTime, value));
-  };
-
   useEffect(() => {
     if (!open) return;
     const initialStart = formatCompactTime(slot.hour, slot.minute);
-    const initialEnd = addMinutesToDateTime(slot.date || dateKey(getTodayUtcPlusTwo()), initialStart, 15);
+    const initialDate = slot.date || dateKey(getTodayUtcPlusTwo());
+    const initialEnd = addMinutesToDateTime(initialDate, initialStart, 15);
     setDrawerStep(1);
-    setStartDate(slot.date || dateKey(getTodayUtcPlusTwo()));
-    setStartTime(initialStart);
-    setEndTime(initialEnd.date === (slot.date || dateKey(getTodayUtcPlusTwo())) ? initialEnd.time : "23:45");
+    setOccurrences([{ date: initialDate, start: initialStart, end: initialEnd.date === initialDate ? initialEnd.time : "23:45" }]);
     if (editingEvent) {
       const editAttendees = (editingEvent.storedAttendees ?? []).map((a) => {
         const dirPerson = (attendeeDirectory[a.type as AttendeeType] ?? []).find((p) => p.id === a.id);
@@ -1375,9 +1481,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
       setTitle(editingEvent.title);
       const eStart = formatCompactTime(editingEvent.hour, editingEvent.minute);
       const eEnd = formatCompactTime(editingEvent.endHour, editingEvent.endMinute);
-      setStartDate(editingEvent.date);
-      setStartTime(eStart);
-      setEndTime(eEnd);
+      setOccurrences([{ date: editingEvent.date, start: eStart, end: eEnd }]);
       setDescription(editingEvent.description ?? "");
       setLocationOpen(editingEvent.storedLocation ? editingEvent.storedLocation.open : true);
     } else {
@@ -1427,10 +1531,13 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
     setSidePanel(null);
     setEmailSubjects(defaultEmailSubjects);
     setEmailBodies(defaultEmailBodies);
+    setSmartDocument(null);
+    setDraftedOnce(false);
+    setAiError(null);
   }, [open, slot.date, slot.hour, slot.minute, initialCandidate, initialContact, editingEvent, rescheduleDate, fixedEventType, configuredEventTypeNames, initialLinkedRecords]);
 
   const getOccurrences = (): TimedDate[] =>
-    startDate ? [{ date: startDate, start: startTime, end: endTime }] : [];
+    [...occurrences].sort((a, b) => dateTimeStamp(a.date, a.start) - dateTimeStamp(b.date, b.start));
 
    const validateEvent = () => {
     const problems = { title: !title.trim(), date: dateMissing || isRescheduleSameDate, organization: false, context: false, location: false, eventType: false, linkedTo: false };
@@ -1474,84 +1581,143 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
 
   const shouldPreviewInvitation = selectedAttendees.length > 0;
 
-  /** Context payload for the AI drafter, built from all drawer inputs. */
-  const buildAiContext = () => {
-    const when = startDate
-      ? `${new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(parseDateKey(startDate))}, ${startTime}–${endTime}`
-      : "";
-    const typeDefinition = configuredEventTypes.find((t) => t.name === eventType);
-    const reminderLabel = reminder
-      ? `${reminderValue} ${reminderUnit} before`
+  /** Build the single canonical Step 1 JSON document used by AI + send. */
+  const buildSmartDocument = (): SmartEventDocument => {
+    const typeDefinition = configuredEventTypes.find((item) => item.name === eventType);
+    const records: SmartLinkedRecord[] = linkedRecords.flatMap((record) => {
+      const label = String(record.item?.name ?? record.item?.title ?? record.item?.organization ?? "").trim();
+      if (!label) return [];
+      return [{
+        type: record.type,
+        id: String(record.item?.id ?? record.item?.reference ?? `${record.type}-${label}`),
+        label,
+        variable: LINKED_VARIABLE_BY_TYPE[record.type],
+      }];
+    });
+    // Relationship helpers can auto-select an organization or job from a
+    // contact's existing CRM relationships. Only records explicitly shown in
+    // the Linked to section are allowed to become AI context.
+
+    const attendees: SmartEventDocument["attendees"] = selectedAttendees.map((attendee) => ({
+      id: attendee.id,
+      type: attendee.type,
+      fullName: attendee.name,
+      email: attendee.email,
+    }));
+    const provider = locationSnapshot?.provider;
+    const location: SmartEventDocument["event"]["location"] = !locationOpen || !locationSnapshot
+      ? { type: "none", label: "No location", value: null }
+      : locationSnapshot.type === "online"
+        ? {
+            type: "online",
+            label: "Online",
+            provider,
+            value:
+              provider === "manual"
+                ? locationSnapshot.manualUrl ?? null
+                : provider === "google"
+                  ? null
+                  : provider
+                    ? meetingProviders[provider].link
+                    : null,
+            generatedOnCreate: provider === "google",
+          }
+        : locationSnapshot.type === "company"
+          ? { type: "company", label: "Company address", value: locationSnapshot.office || null }
+          : {
+              type: "custom",
+              label: "Other location",
+              value: [
+                locationSnapshot.custom.street,
+                locationSnapshot.custom.number,
+                locationSnapshot.custom.box,
+                locationSnapshot.custom.zip,
+                locationSnapshot.custom.city,
+                locationSnapshot.custom.country,
+              ].filter(Boolean).join(", ") || locationSnapshot.custom.query || null,
+            };
+    const reminderMinutes = reminder
+      ? Math.max(0, Number(reminderValue) || 0) *
+        (reminderUnit === "minutes" ? 1 : reminderUnit === "hours" ? 60 : reminderUnit === "days" ? 1440 : 10080)
       : null;
-    return {
-      eventType,
-      // Backend trigger context for the event type (falls back to the
-      // user-authored description for custom types).
-      eventTypeDescription: typeDefinition?.description ?? undefined,
-      title: title.trim(),
-      description: description || undefined,
-      when,
-      hasMeetLink: locationSnapshot?.type === "online" && (locationSnapshot?.provider === "google" || locationSnapshot?.provider === "wiggli"),
-      locationLabel:
-        locationSnapshot?.type === "online"
-          ? null
-          : locationSnapshot?.type === "company"
-            ? locationSnapshot.office || null
-            : [locationSnapshot?.custom.street, locationSnapshot?.custom.city].filter(Boolean).join(", ") || null,
-      reminderLabel,
-      // Linked-to records: the AI's main "what are we talking about" triggers.
-      linkedRecords: linkedRecords.map((r) => ({
-        type: r.type,
-        title: String(r.item?.name ?? r.item?.title ?? r.item?.organization ?? ""),
-      })).filter((r) => r.title),
-      organizationName: selectedOrganization?.name ?? null,
-      attendeeGroups: {
-        candidates: selectedAttendees.filter((p) => p.type === "candidate" || p.type === "freelancer").map((p) => p.name),
-        contacts: selectedAttendees.filter((p) => p.type === "contact").map((p) => p.name),
-        internals: selectedAttendees.filter((p) => p.type === "internal").map((p) => p.name),
+    const email = session?.user?.email?.toLowerCase() ?? "organizer@wiggli.com";
+    const smartSlots: SmartEventSlot[] = getOccurrences().map((occurrence) => ({
+      date: occurrence.date,
+      startTime: occurrence.start,
+      endTime: occurrence.end,
+    }));
+    const primarySlot = smartSlots[0];
+    const document: SmartEventDocument = {
+      schemaVersion: 1,
+      event: {
+        title: title.trim(),
+        type: {
+          id: typeDefinition?.id,
+          name: eventType,
+          context: typeDefinition?.description || `A professional ${eventType.toLowerCase()} calendar event.`,
+        },
+        description: description.trim() || undefined,
+         date: primarySlot?.date ?? "",
+         startTime: primarySlot?.startTime ?? "",
+         endTime: primarySlot?.endTime ?? "",
+         slots: smartSlots,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
+        location,
+        reminderMinutes,
       },
+      organizer: {
+        fullName: session?.user?.name?.trim() || email.split("@")[0],
+        email,
+        phone: "BE +32456555992",
+      },
+      linkedTo: records,
+      attendees,
+      audiences: [],
     };
+    document.audiences = buildSmartAudiences(attendees, records);
+    return document;
   };
 
-  const availableTabsForAi = (): ("candidate" | "contact" | "internal")[] => {
-    const tabs: ("candidate" | "contact" | "internal")[] = [];
-    if (selectedAttendees.some((p) => p.type === "candidate" || p.type === "freelancer")) tabs.push("candidate");
-    if (selectedAttendees.some((p) => p.type === "contact")) tabs.push("contact");
-    if (selectedAttendees.some((p) => p.type === "internal")) tabs.push("internal");
-    return tabs.length ? tabs : ["candidate"];
-  };
-
-  const generateDrafts = async (instruction?: string) => {
+  const generateDrafts = async (
+    instruction?: string,
+    documentOverride?: SmartEventDocument,
+    rebuild = false
+  ) => {
     setAiBusy(true);
     setAiError(null);
-    setRevisionOpen(false);
     try {
+      const document = documentOverride ?? smartDocument ?? buildSmartDocument();
+      setSmartDocument(document);
       const res = await fetch("/api/invite-draft", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ context: buildAiContext(), tabs: availableTabsForAi(), instruction }),
+        body: JSON.stringify({ document, instruction }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      // AI returns plain text — convert newlines to <br> so the rich editor
-      // renders paragraphs; variables arrive as [Tokens] (chips on next sync).
-      const asHtml = (t: string) =>
-        t
-          .split(/\n{2,}/)
-          .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
-          .join("");
+      if (!res.ok) {
+        notifyIfGoogleSessionExpired(res, body);
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
       setEmailBodies((prev) => {
         const next = { ...prev };
-        for (const [tab, text] of Object.entries(body.drafts as Record<string, string>)) {
-          next[tab as keyof typeof next] = asHtml(text);
+        for (const { type: tab } of document.audiences) {
+          const paragraph = String(body.paragraphs?.[tab] ?? "").trim();
+          if (!paragraph) continue;
+          next[tab] = rebuild || !prev[tab]
+            ? buildSmartInvitationHtml(document, tab, paragraph)
+            : replaceSmartContextBlock(prev[tab], paragraph);
         }
         return next;
       });
-      if (body.subjects) {
-        setEmailSubjects((prev) => ({ ...prev, ...body.subjects }));
-      }
+      if (rebuild) setEmailSubjects(defaultEmailSubjects);
       setDraftedOnce(true);
-      showToast(instruction ? "Invitation updated with AI" : "AI draft ready for each attendee type");
+      showToast(
+        body.source === "fallback"
+          ? "Smart draft ready using Wiggli's fallback copy"
+          : instruction
+            ? "Context paragraphs updated with AI"
+            : "Smart draft ready for each attendee type"
+      );
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "AI generation failed");
     } finally {
@@ -1567,7 +1733,8 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
       void (async () => {
         setSending(true);
         try {
-          const occurrence = { date: startDate, start: startTime, end: endTime };
+          const occurrence = getOccurrences()[0];
+          if (!occurrence) throw new Error("Select at least one time slot.");
           const res = await fetch("/api/native-events", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -1586,15 +1753,20 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                 ? Math.max(0, Number(reminderValue) || 0) *
                   (reminderUnit === "minutes" ? 1 : reminderUnit === "hours" ? 60 : reminderUnit === "days" ? 1440 : 10080)
                 : null,
-              date: occurrence.date,
-              start: occurrence.start,
-              end: occurrence.end,
+               date: occurrence.date,
+               start: occurrence.start,
+               end: occurrence.end,
+               slots: getOccurrences().map((item) => ({ date: item.date, start: item.start, end: item.end })),
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
-              attendees: selectedAttendees.map((r) => ({ email: r.email, name: r.name })),
+              eventType,
+              attendees: selectedAttendees.map((r) => ({ email: r.email, name: r.name, type: r.type })),
             }),
           });
           const created = await res.json();
-          if (!res.ok) throw new Error(created.error ?? `HTTP ${res.status}`);
+          if (!res.ok) {
+            notifyIfGoogleSessionExpired(res, created);
+            throw new Error(created.error ?? `HTTP ${res.status}`);
+          }
           onCreate(title.trim(), getOccurrences(), buildMeta());
           showToast(`${title.trim()} created — Google emailed native invitations`);
           onClose();
@@ -1614,10 +1786,13 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
       setDescription("");
       setError(false);
     } else {
-      // Entering step 2: kick off AI drafting immediately (subject + body).
+      // Build one canonical document, then draft the fixed invitation around
+      // one AI-owned context paragraph per attendee audience.
+      const document = buildSmartDocument();
+      setSmartDocument(document);
       setDrawerStep(2);
       setSidePanel(null);
-      if (!draftedOnce) void generateDrafts();
+      void generateDrafts(undefined, document, true);
     }
   };
 
@@ -1630,61 +1805,21 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
     setError(false);
   };
 
-  /** Linked-to values for the server-side [Linked.*] variable resolver. */
-  const buildLinkedMap = () => {
-    const map: Record<string, string> = {};
-    for (const r of linkedRecords) {
-      const value = String(r.item?.name ?? r.item?.title ?? r.item?.organization ?? "").trim();
-      if (!value) continue;
-      if (r.type === "Candidate") map.candidate = value;
-      else if (r.type === "Contact") map.contact = value;
-      else if (r.type === "Job") map.job = value;
-      else if (r.type === "Opportunity") map.opportunity = value;
-      else if (r.type === "Organization") map.organization = value;
-    }
-    if (!map.organization && selectedOrganization) map.organization = selectedOrganization.name;
-    if (!map.job && !map.opportunity && selectedContext) {
-      if (selectedContext.kind === "job") map.job = selectedContext.title;
-      else map.opportunity = selectedContext.title;
-    }
-    return map;
-  };
-
   const handleSendInvitation = async () => {
     const recipients = [...selectedAttendees];
-    const occurrence = { date: startDate, start: startTime, end: endTime };
     if (!startDate) return;
+    const document = smartDocument ?? buildSmartDocument();
 
     setSending(true);
     try {
       // Create the Google event ONCE (with Meet + reminder), inviting all attendees.
-      const createRes = await fetch("/api/drawer-events", {
+      // Both composed modes share this exact reviewed document. Only the
+      // transport changes, keeping the Smart-vs-Resend comparison controlled.
+      const createRes = await fetch(resendRsvpMode ? "/api/resend-events" : "/api/drawer-events", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          title: title.trim(),
-          description,
-          location:
-            locationSnapshot?.type === "online"
-              ? undefined
-              : locationSnapshot
-                ? locationSnapshot.custom.street || locationSnapshot.office || locationSnapshot.custom.query || ""
-                : undefined,
-          conference: locationSnapshot?.type === "online" && locationSnapshot?.provider === "google",
-          meetLink: null,
-          reminderMinutes: reminder
-            ? Math.max(0, Number(reminderValue) || 0) *
-              (reminderUnit === "minutes" ? 1 : reminderUnit === "hours" ? 60 : reminderUnit === "days" ? 1440 : 10080)
-            : null,
-          date: occurrence.date,
-          start: occurrence.start,
-          end: occurrence.end,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
-          eventType,
-          organizationName: selectedOrganization?.name ?? null,
-          linkedTitle: selectedContext?.title ?? null,
-          linked: buildLinkedMap(),
-          attendees: recipients.map((r) => ({ email: r.email, name: r.name, type: r.type })),
+          smartDocument: document,
           inviteMessages: Object.entries(emailBodies).map(([tab, bodyHtml]) => ({
             tab: tab as "candidate" | "contact" | "internal",
             subject: emailSubjects[tab as "candidate" | "contact" | "internal"],
@@ -1694,10 +1829,13 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
         }),
       });
       const created = await createRes.json();
-      if (!createRes.ok) throw new Error(created.error ?? `HTTP ${createRes.status}`);
+      if (!createRes.ok) {
+        notifyIfGoogleSessionExpired(createRes, created);
+        throw new Error(created.error ?? `HTTP ${createRes.status}`);
+      }
 
       onCreate(title.trim(), getOccurrences(), buildMeta());
-      showToast(`${title.trim()} created — Google event${created.hangoutLink ? " + Meet link" : ""} synced`);
+      showToast(`${title.trim()} created — ${resendRsvpMode ? "Resend RSVP invitations" : "Google event"}${created.hangoutLink ? " + Meet link" : ""} synced`);
       window.setTimeout(() => {
         if (recipients.length === 1) showToast(`Personalized invitation emailed to ${recipients[0].name}`);
         else showToast(`${recipients.length} personalized invitations sent successfully`);
@@ -1727,7 +1865,11 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
 
     const contextualWhen: Record<string, boolean> = {
       "[Meeting.Link]": hasMeet,
+      "[Event.Description]": Boolean(description.trim()),
       "[Event.Location]": Boolean(locationSnapshot && locationSnapshot.type !== "online"),
+      "[Event.Reminder]": reminder,
+      "[Organizer.Phone]": true,
+      "[Organizer.Email]": true,
       "[Linked.Candidate]": linkedTypes.has("Candidate"),
       "[Linked.Contact]": linkedTypes.has("Contact"),
       "[Linked.Job]": hasJob,
@@ -1743,7 +1885,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
       tag: v.tag,
       hint: v.label,
     }));
-  }, [selectedOrganization, selectedContext, locationSnapshot, linkedRecords, selectedAttendees]);
+  }, [selectedOrganization, selectedContext, locationSnapshot, linkedRecords, selectedAttendees, description, reminder]);
 
   const activeRecipients = useMemo(() => {
     if (activeInviteTab === "candidate") {
@@ -1774,7 +1916,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                 <input className="drawer-title-input" value={title} onChange={(event) => { setTitle(event.target.value); setError(false); }} placeholder="Add a title" />
                 {error && <p className="field-error"><FieldErrorIcon /> Event title is required</p>}
 
-                <div className="field-label field-space event-type-label-row"><span className="event-type-label-copy">Event type<span className="required-star">*</span></span><span className="event-type-help-wrap"><button type="button" className="event-type-help-button" aria-label="How to add an event type" aria-expanded={eventTypeHelpOpen} onClick={() => setEventTypeHelpOpen((current) => !current)}><CircleHelp size={17} /></button>{eventTypeHelpOpen && <span className="event-type-help-popover" role="tooltip"><span>Need a custom type? Go to</span><a href="/settings/custom-fields?category=event-type" target="_blank" rel="noopener noreferrer" onClick={() => setEventTypeHelpOpen(false)}>Event type settings <ExternalLink size={15} /></a></span>}</span></div>
+                 <div className="field-label field-space event-type-label-row"><span className="event-type-label-copy">Event type<span className="required-star">*</span></span></div>
                 <div ref={eventTypeRef} className="event-type-dropdown-wrap" style={{ position: "relative" }}>
                   <button className="location-select" type="button" aria-expanded={eventTypeMenuOpen} onClick={() => setEventTypeMenuOpen((v) => !v)} style={{ width: "100%", fontSize: 13, height: 39 }}>
                     <span style={{ fontSize: 13 }}>{eventType}</span>
@@ -1790,19 +1932,29 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                           </button>
                         );
                       })}
+                      <button type="button" role="menuitem" className="event-type-custom-option" onClick={() => { window.open("/settings/custom-fields?category=event-type", "_blank", "noopener,noreferrer"); setEventTypeMenuOpen(false); }} style={{ fontSize: 13 }}>
+                        <span style={{ fontSize: 13 }}>Add custom event type</span>
+                        <ArrowUpRight size={15} />
+                      </button>
                     </div>
                   )}
                 </div>
                 {eventTypeError && <p className="field-error"><FieldErrorIcon /> Event type is required</p>}
 
-                <label className="field-label field-space"><span>Date<span className="required-star">*</span></span></label>
-                <div className="date-mode-card single-date-card">
-                  <label>Date<DrawerDateField value={startDate} min={todayKey} onChange={changeStartDate} label="Event date" /></label>
-                  <label>Start at<DrawerTimeField value={startTime} min={minimumTimeForDate(startDate)} onChange={changeStartTime} label="Start time" /></label>
-                  <label>Ends at<DrawerTimeField value={endTime} min={minutesToTime(timeToMinutes(startTime) + 15)} onChange={changeEndTime} label="End time" /></label>
-                </div>
+                 <label className="field-label field-space"><span>Date &amp; Time<span className="required-star">*</span></span></label>
+                 <MultipleDatePicker
+                   key={open ? `date-time-${slot.date}-${slot.hour}-${slot.minute}` : "date-time-closed"}
+                   value={occurrences}
+                   minDate={todayKey}
+                   onChange={setOccurrences}
+                 />
+                 {occurrences.length > 1 && (
+                   <div className="date-time-support" aria-live="polite">
+                     <strong>{occurrences.length} time slots</strong> will be sent as separate invitations so attendees can choose the time that works best.
+                   </div>
+                 )}
 
-                {dateError && <p className="field-error"><FieldErrorIcon /> {isRescheduleSameDate ? "Please choose a different date to reschedule" : "Select a date"}</p>}
+                 {dateError && <p className="field-error"><FieldErrorIcon /> {isRescheduleSameDate ? "Please choose a different date to reschedule" : "Select a date"}</p>}
 
                 <section className="related-to-section">
                   <div className="field-label field-space location-heading"><span>Linked to</span></div>
@@ -1842,10 +1994,12 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
             </div>
             <div className="drawer-body review-invite-body">
               <div className="invite-customize-header">
-                <h3><Mail size={16} /> Compose Interview Message</h3>
+                <h3><Mail size={16} /> Compose {resendRsvpMode ? "Resend RSVP" : "Smart Event"} Invitation</h3>
                 <div className="invite-notice-banner">
                   <Info size={16} />
-                  <span>Please review and customize the email below. Ensure all details are correct before sending</span>
+                  <span>{resendRsvpMode
+                    ? "This version is sent from the professional Resend calendar domain with one native RSVP invitation per slot."
+                    : "Please review and customize the email below. Ensure all details are correct before sending"}</span>
                 </div>
               </div>
 
@@ -1901,13 +2055,13 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                       className={`toolbar-btn ai-generate-btn ${aiBusy ? "busy" : ""}`}
                       onClick={() => void generateDrafts()}
                       disabled={aiBusy || !title.trim()}
-                      title={!title.trim() ? "Add a title first" : "Generate invitation with AI"}
+                      title={!title.trim() ? "Add a title first" : "Regenerate only the context paragraph"}
                     >
                       {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                      {aiBusy ? "Writing…" : draftedOnce ? "Regenerate with AI" : "Generate with AI"}
+                      {aiBusy ? "Writing…" : draftedOnce ? "Regenerate context paragraph" : "Generate context paragraph"}
                     </button>
                     <span style={{ fontSize: 11, color: "#8da0b9" }}>
-                      Personalized per attendee type · variables resolved at send time
+                      Fixed structure · AI context only · variables resolved at send time
                     </span>
                   </div>
 
@@ -1947,21 +2101,14 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                         <div style={{ textAlign: "center" }}>
                           <Loader2 size={26} className="animate-spin" style={{ color: "#0f9d76" }} />
                           <p style={{ margin: "8px 0 0", fontSize: 13, color: "#334155", fontWeight: 500 }}>
-                            AI is writing your invitation…
+                            AI is writing the context paragraph…
                           </p>
                           <p style={{ margin: "2px 0 0", fontSize: 11, color: "#8da0b9" }}>
-                            Subject + body, personalized per attendee type
+                            Your greeting, details, RSVP note and signature stay unchanged
                           </p>
                         </div>
                       </motion.div>
                     )}
-                  </div>
-
-                  {/* Sender Signature */}
-                  <div className="invite-signature-card">
-                    <strong>Axelle Bastin</strong>
-                    <span className="signature-meta"><Phone size={14} /> BE +32456555992</span>
-                    <span className="signature-meta"><Mail size={14} /> axelle-f2e52@mail.hme.ovh</span>
                   </div>
 
                   {/* Variables available for THIS email (from the user's inputs) */}
@@ -1985,48 +2132,6 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                     ))}
                   </div>
 
-                  {/* AI revision: tell the AI what to change */}
-                  <AnimatePresence initial={false}>
-                    {revisionOpen && (
-                      <motion.div
-                        key="revision-box"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                        style={{ overflow: "hidden" }}
-                      >
-                        <div className="ai-revision-box">
-                          <textarea
-                            autoFocus
-                            value={revisionText}
-                            onChange={(e) => setRevisionText(e.target.value)}
-                            placeholder='e.g. "Make it more formal and mention the Q4 budget review"'
-                            rows={2}
-                          />
-                          <div className="ai-revision-actions">
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => { setRevisionOpen(false); setRevisionText(""); }}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              className="create-event-button"
-                              style={{ padding: "8px 16px", fontSize: 13 }}
-                              disabled={!revisionText.trim() || aiBusy}
-                              onClick={() => { void generateDrafts(revisionText.trim()); setRevisionText(""); }}
-                            >
-                              {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                              Update with AI
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
 
               </div>

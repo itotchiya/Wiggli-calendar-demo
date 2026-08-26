@@ -1,0 +1,63 @@
+.page { color: #2f4058; background: #f8fafc; flex: 1; min-height: 0; padding: 22px 28px 30px; overflow-x: hidden; overflow-y: auto; }
+.titleRow { justify-content: space-between; align-items: flex-start; gap: 20px; height: 54px; display: flex; }
+.titleRow h1 { margin: 4px 0 0; font-size: 18px; font-weight: 600; }
+.titleRow > div { gap: 9px; display: flex; }
+.titleRow button { cursor: pointer; border-radius: 9px; height: 40px; padding: 0 17px; font-size: 13px; font-weight: 600; }
+.discardButton { color: #53647b; background: #fff; border: 1px solid #dce3eb; }
+.saveButton { color: #fff; background: #0b8b80; border: 1px solid #0b8b80; }
+.titleRow button:disabled { color: #bdc7d2; cursor: not-allowed; background: #f3f6f8; border-color: #e8edf2; }
+.manager { background: #fff; border: 1px solid #e2e8ee; border-radius: 12px; grid-template-columns: 270px minmax(0, 1fr); min-height: calc(100% - 54px); display: grid; overflow: visible; }
+.categories { border-right: 1px solid #e5eaf0; min-width: 0; padding: 15px 12px 22px; }
+.categories button { color: #536680; text-align: left; cursor: pointer; background: none; border: 0; border-radius: 7px; align-items: center; width: 100%; min-height: 37px; padding: 0 12px; font-size: 12px; display: flex; }
+.categories button:hover { background: #f5f8fa; }
+.categoryActive { color: #087d73 !important; background: #eef6f5 !important; font-weight: 650; }
+.content { flex-direction: column; min-width: 0; min-height: 0; display: flex; overflow: visible; }
+.contentHeader { border-bottom: 1px solid #e8edf1; flex: none; padding: 25px 28px 20px; }
+.contentHeader h2 { align-items: center; gap: 9px; margin: 0; font-size: 16px; font-weight: 650; display: flex; }
+.contentHeader p { color: #718199; max-width: 850px; margin: 14px 0 0; font-size: 12px; line-height: 1.6; }
+.optionsPanel { border: 1px solid #e1e7ed; border-radius: 11px; margin: 20px 24px 24px; padding: 18px; }
+.optionsToolbar { justify-content: space-between; align-items: center; gap: 16px; min-height: 46px; margin-bottom: 14px; display: flex; }
+.optionsToolbar > div strong, .optionsToolbar > div span { display: block; }
+.optionsToolbar > div strong { font-size: 13px; }
+.optionsToolbar > div span { color: #8a98aa; margin-top: 3px; font-size: 10px; }
+.optionsToolbar > button { color: #087d73; cursor: pointer; background: #fff; border: 1px solid #0b8b80; border-radius: 8px; align-items: center; gap: 7px; height: 38px; padding: 0 14px; font-size: 13px; font-weight: 600; display: inline-flex; }
+.validation { color: #dc2626; margin: -4px 0 10px; font-size: 11px; }
+.optionsList { gap: 10px; display: grid; }
+.optionRow { background: #f7f9fb; border-radius: 9px; grid-template-columns: 42px minmax(130px, .8fr) minmax(180px, 1.2fr) 42px; align-items: center; gap: 6px; min-width: 0; min-height: 56px; padding: 7px 9px; display: grid; }
+.dragging { z-index: 2; opacity: .65; box-shadow: 0 10px 25px #2333471f; }
+.dragHandle, .deleteButton { color: #718198; cursor: grab; touch-action: none; background: none; border: 0; border-radius: 8px; place-items: center; width: 38px; height: 38px; display: grid; }
+.dragHandle:active { cursor: grabbing; }
+.deleteButton { color: #53647a; cursor: pointer; touch-action: auto; background: #fff; border: 1px solid #dfe6ed; }
+.deleteButton:hover { color: #dc2626; background: #fff7f7; border-color: #fecaca; }
+.optionRow input { color: #33445b; background: #fff; border: 1px solid #dfe6ed; border-radius: 8px; outline: 0; width: 100%; height: 40px; padding: 0 12px; font-size: 13px; }
+.optionRow input:focus { border-color: #0b8b80; box-shadow: 0 0 0 3px #0b8b8014; }
+.aiNote { color: #718199; margin: 16px 2px 0; padding-top: 14px; border-top: 1px solid #edf1f4; font-size: 11px; line-height: 1.55; }
+.emptyCategory { text-align: center; flex: 1; align-content: center; justify-items: center; display: grid; }
+.emptyCategory h2 { margin: 0; font-size: 18px; }
+.emptyCategory p { color: #7b8a9e; font-size: 12px; }
+.dialogScrim { z-index: 80; background: #15202d73; place-items: center; padding: 22px; display: grid; position: fixed; inset: 0; }
+.dialog { background: #fff; border-radius: 14px; width: min(560px, 100%); overflow: hidden; box-shadow: 0 24px 70px #15202d40; }
+.dialog header { border-bottom: 1px solid #e3e8ed; justify-content: space-between; align-items: center; height: 70px; padding: 0 24px; display: flex; }
+.dialog header h2 { margin: 0; font-size: 22px; font-weight: 600; }
+.dialog header button { color: #526176; cursor: pointer; background: none; border: 0; }
+.dialog > p { color: #35465e; margin: 0; padding: 31px 24px; font-size: 16px; }
+.dialog footer { border-top: 1px solid #e3e8ed; justify-content: flex-end; gap: 10px; padding: 17px 24px; display: flex; }
+.dialog footer button { cursor: pointer; border-radius: 9px; height: 42px; padding: 0 17px; font-size: 13px; font-weight: 650; }
+.cancelButton { color: #44556c; background: #fff; border: 1px solid #cfd8e2; }
+.confirmDelete { color: #fff; background: #dc2626; border: 1px solid #dc2626; align-items: center; gap: 7px; display: inline-flex; }
+@media (max-width: 850px) {
+  .page { padding: 16px 12px 24px; overflow-y: auto; }
+  .manager { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - 150px); overflow: visible; }
+  .categories { border-bottom: 1px solid #e5eaf0; border-right: 0; gap: 5px; display: flex; overflow-x: auto; }
+  .categories button { flex: none; width: auto; }
+  .content { min-height: 620px; }
+}
+@media (max-width: 650px) {
+  .titleRow { flex-direction: column; align-items: flex-start; height: auto; margin-bottom: 14px; }
+  .titleRow > div { align-self: stretch; }
+  .titleRow button { flex: 1; }
+  .contentHeader, .optionsPanel { margin-left: 12px; margin-right: 12px; padding-left: 14px; padding-right: 14px; }
+  .optionRow { grid-template-columns: 34px minmax(0, 1fr) 38px; padding: 6px; }
+  .optionRow input:nth-of-type(2) { grid-column: 2 / 4; }
+  .dragHandle { width: 32px; }
+}

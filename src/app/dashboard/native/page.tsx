@@ -196,7 +196,7 @@ export default function NativeDrawerPage() {
       <EventDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        nativeMode
+        mode="native"
         slot={{ date: "", hour: 0, minute: 0 }}
         onCreate={() => {
           void load();

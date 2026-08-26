@@ -8,7 +8,7 @@
  * Contexts (event type / linked records / attendee tabs) are the AI "triggers":
  * they tell the generator WHAT the meeting is about so the invitation copy fits
  * the situation (e.g. Interview + linked Job → candidate evaluation for a role;
- * Job intake + linked Job → gathering the role's requirements from the client).
+ * Job intake + linked Job → gathering the role's requirements).
  */
 
 export type InviteVariable = {
@@ -23,7 +23,7 @@ export type InviteVariable = {
 export const INVITE_VARIABLES: InviteVariable[] = [
   // ── Event facts ────────────────────────────────────────────────────────────
   { tag: "[Event.Title]", label: "Event title", desc: "The event title" },
-  { tag: "[Event.Type]", label: "Event type", desc: "Event type, e.g. Interview, Screening call, Job intake" },
+  { tag: "[Event.Type]", label: "Event type", desc: "Event type, e.g. Call, Interview, Meeting, Job intake" },
   { tag: "[Event.Date]", label: "Event date", desc: "Human-readable date, e.g. Friday, August 28, 2026" },
   { tag: "[Event.Start_time]", label: "Start time", desc: "Event start time, e.g. 10:00" },
   { tag: "[Event.End_time]", label: "End time", desc: "Event end time, e.g. 10:30" },
@@ -42,7 +42,9 @@ export const INVITE_VARIABLES: InviteVariable[] = [
 
   // ── Organizer & attendees ──────────────────────────────────────────────────
   { tag: "[Organizer.Name]", label: "Organizer name", desc: "The sender's name" },
-  { tag: "[Attendees.List]", label: "Attendees list", desc: "Bullet list of ALL participant names (organizer tagged)" },
+  { tag: "[Organizer.Email]", label: "Organizer email", desc: "The sender's email address" },
+  { tag: "[Organizer.Phone]", label: "Organizer phone", desc: "The sender's phone number, if configured" },
+  { tag: "[Attendees.List]", label: "Attendees list", desc: "Bullet list of ALL participant names and email addresses" },
   { tag: "[Attendees.Candidates]", label: "Candidate attendees", desc: "Bullet list of candidate/freelancer participants only" },
   { tag: "[Attendees.Contacts]", label: "Contact attendees", desc: "Bullet list of external contact participants only" },
   { tag: "[Attendees.Internals]", label: "Internal attendees", desc: "Bullet list of internal colleague participants only" },
@@ -86,19 +88,12 @@ export function stripUnknownTokens(text: string): string {
  * the event-type settings, then to a generic line.
  */
 export const EVENT_TYPE_CONTEXTS: Record<string, string> = {
-  meeting: "A general meeting. Keep the invitation neutral and professional.",
-  "screening call":
-    "An initial screening conversation to learn about a candidate's background and expectations before deeper selection stages. Light, welcoming tone.",
+  call: "A phone conversation to discuss, clarify, or follow up on a specific topic.",
   interview:
-    "A formal job interview to evaluate a candidate for a role. The invitation should prepare the recipient for a structured conversation about their fit.",
-  "candidate meeting":
-    "A non-evaluative discussion with a candidate (e.g. process updates, offer discussion, onboarding). Supportive tone — they are not being judged here.",
-  "client meeting":
-    "A discussion with an external client contact. Service-oriented, professional tone; the sender's company is the recruiting partner.",
+    "A structured conversation to evaluate a candidate's experience and suitability for a job opportunity.",
+  meeting: "A general discussion to share information, align on a topic, or agree on next steps.",
   "job intake":
-    "A job intake session: gathering and confirming the job's requirements, profile and expectations. Often held WITH the client who is hiring — the goal is to collect information about the role.",
-  "follow-up":
-    "A follow-up to a previous conversation. Reference continuity ('following up on our last discussion') without inventing what was said.",
+    "A discussion to gather requirements, responsibilities, expectations, and hiring needs for a job opening.",
 };
 
 export function eventTypeContext(name: string, userDescription?: string | null): string {
@@ -110,15 +105,14 @@ export function eventTypeContext(name: string, userDescription?: string | null):
 
 /**
  * What it MEANS when a record type is linked to the event. These are the main
- * triggers: e.g. "Job intake" + linked Job → "we will gather info about this
- * job"; "Interview" + linked Candidate + Job → "we are evaluating this
- * candidate for this job".
+ * triggers: e.g. "Job intake" + linked Job means the discussion concerns that
+ * job. Linking a person provides context but does not mean they are attending.
  */
 export const LINKED_RECORD_CONTEXTS: Record<string, string> = {
   Candidate:
-    "A specific CANDIDATE is linked ([Linked.Candidate] = their name). The event revolves around them: their profile, application or evaluation.",
+    "A specific CANDIDATE is linked ([Linked.Candidate] = their name). The event may concern their profile, application or evaluation; this does not mean they are attending.",
   Contact:
-    "A client CONTACT is linked ([Linked.Contact] = their name). They represent the hiring side; treat them as the client relationship.",
+    "A client CONTACT is linked ([Linked.Contact] = their name). They provide client context; this does not mean they are attending.",
   Job:
     "A JOB is linked ([Linked.Job] = its title). The event is about this opening: its requirements, profile, process or candidates.",
   Opportunity:
@@ -133,11 +127,11 @@ export const LINKED_RECORD_CONTEXTS: Record<string, string> = {
  */
 export const TAB_AUDIENCE_CONTEXTS: Record<"candidate" | "contact" | "internal", string> = {
   candidate:
-    "A job candidate or freelancer. If a client contact is also attending, this candidate will meet THE CLIENT (who is hiring); the sender's company organizes the process as talent acquisition. Frame it as: you will meet the client/team for this opportunity.",
+    "A job candidate or freelancer. Describe other participants only when the attendance data marks them as attending.",
   contact:
-    "An external CLIENT CONTACT who is hiring — they will interview/evaluate the candidate; the sender's company (talent acquisition / founder) arranges the interview between them. Frame it as: we have organized this session between you and the candidate.",
+    "An external client contact. Describe candidates or other participants only when the attendance data marks them as attending.",
   internal:
-    "An internal colleague who takes part in the meeting/interview. Frame it as: you are engaged as part of the panel/session — share when and with whom, keep it brief and operational.",
+    "An internal colleague. Use the attendee composition to frame an internal discussion or a session with external participants accurately.",
 };
 
 /**

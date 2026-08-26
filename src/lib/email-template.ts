@@ -4,11 +4,12 @@ import { formatEventRange } from "./format";
  *  No branded frame — basic HTML only (bold variables, bulleted details). */
 export function buildCleanEmailHtml(
   styledBodyHtml: string,
-  opts: { organizerEmail: string; organizerName?: string; signatureHtml?: string }
+  opts: { organizerEmail: string; organizerName?: string; signatureHtml?: string; includeSignature?: boolean }
 ): string {
   const name = opts.organizerName ?? opts.organizerEmail.split("@")[0];
-  const sig =
-    opts.signatureHtml ??
+  const sig = opts.includeSignature === false
+    ? ""
+    : opts.signatureHtml ??
     `<div style="margin-top:22px;padding-top:14px;border-top:1px solid #e5e7eb;color:#374151;font-size:13px;line-height:1.5;">
        <div style="font-weight:600;">${name}</div>
        <div style="color:#6b7280;">BE +324****5992</div>

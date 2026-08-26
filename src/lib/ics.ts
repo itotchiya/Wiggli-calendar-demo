@@ -7,9 +7,19 @@
  * the human-facing timezone lives on the Google event and in the email body.
  */
 
-export type IcsAttendee = { email: string; name?: string };
+export type IcsAttendee = {
+  email: string;
+  name?: string;
+  /** Defaults to NEEDS-ACTION. The human organizer is explicitly ACCEPTED. */
+  partstat?: "NEEDS-ACTION" | "ACCEPTED" | "TENTATIVE" | "DECLINED";
+  /** Defaults to true only for NEEDS-ACTION invitees. */
+  rsvp?: boolean;
+  /** Existing Gmail invites retain this extension; Resend's minimal form omits it. */
+  includeGuestCount?: boolean;
+};
 
 export type IcsInput = {
+  prodId?: string;
   uid: string; // MUST match the Google event's iCalUID so replies map back
   sequence: number;
   organizer: { email: string; name?: string };
@@ -31,6 +41,11 @@ function esc(v: string): string {
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")
     .replace(/\r?\n/g, "\\n");
+}
+
+/** RFC 5545 quoted parameter value: separators are legal inside quotes. */
+function param(v: string): string {
+  return v.replace(/[\r\n]+/g, " ").replace(/"/g, "'");
 }
 
 function utcStamp(d: Date): string {
@@ -70,37 +85,42 @@ function fold(line: string): string {
 }
 
 function attendeeLine(a: IcsAttendee): string {
+  const partstat = a.partstat ?? "NEEDS-ACTION";
+  const rsvp = a.rsvp ?? partstat === "NEEDS-ACTION";
   // Minimal param set keeps the pre-CN block short; CN goes last.
   const params = [
+    "CUTYPE=INDIVIDUAL",
     "ROLE=REQ-PARTICIPANT",
-    "PARTSTAT=NEEDS-ACTION",
-    "RSVP=TRUE",
-    a.name ? `CN=${esc(a.name)}` : null,
+    `PARTSTAT=${partstat}`,
+    rsvp ? "RSVP=TRUE" : null,
+    a.includeGuestCount === false ? null : "X-NUM-GUESTS=0",
+    a.name ? `CN="${param(a.name)}"` : null,
   ]
     .filter(Boolean)
     .join(";");
   return fold(`ATTENDEE;${params}:mailto:${a.email.toLowerCase()}`);
 }
 
-export function buildRequestIcs(input: IcsInput): string {
-  const now = new Date();
+function veventLines(input: IcsInput, now: Date): string[] {
   const lines: string[] = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Wiggli//Calendar Invite Demo//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:REQUEST",
     "BEGIN:VEVENT",
     fold(`UID:${input.uid}`),
     `SEQUENCE:${input.sequence}`,
     `DTSTAMP:${utcStamp(now)}`,
+    `CREATED:${utcStamp(now)}`,
+    `LAST-MODIFIED:${utcStamp(now)}`,
     `DTSTART:${utcStamp(input.startUtc)}`,
     `DTEND:${utcStamp(input.endUtc)}`,
     fold(`SUMMARY:${esc(input.title)}`),
     `STATUS:CONFIRMED`,
     `TRANSP:OPAQUE`,
+    `CLASS:PUBLIC`,
+    `PRIORITY:5`,
+    // Outlook-specific busy hints supplement (never replace) RFC 5545 fields.
+    `X-MICROSOFT-CDO-BUSYSTATUS:BUSY`,
+    `X-MICROSOFT-CDO-INTENDEDSTATUS:BUSY`,
     fold(
-      `ORGANIZER;CN=${esc(input.organizer.name ?? input.organizer.email)}:mailto:${input.organizer.email.toLowerCase()}`
+      `ORGANIZER;CN="${param(input.organizer.name ?? input.organizer.email)}":mailto:${input.organizer.email.toLowerCase()}`
     ),
     ...input.attendees.map(attendeeLine),
   ];
@@ -119,7 +139,37 @@ export function buildRequestIcs(input: IcsInput): string {
       "END:VALARM"
     );
   }
-  lines.push("END:VEVENT", "END:VCALENDAR");
+  lines.push("END:VEVENT");
+  return lines;
+}
 
+export function buildRequestIcs(input: IcsInput): string {
+  const now = new Date();
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    `PRODID:${input.prodId ?? "-//Wiggli//Calendar Invite Demo//EN"}`,
+    "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
+    ...veventLines(input, now),
+    "END:VCALENDAR",
+  ];
+
+  return lines.join("\r\n") + "\r\n";
+}
+
+export function buildMultiRequestIcs(inputs: IcsInput[]): string {
+  if (inputs.length === 0) throw new Error("At least one ICS input is required");
+  if (inputs.length === 1) return buildRequestIcs(inputs[0]!);
+  const now = new Date();
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    `PRODID:${inputs[0]!.prodId ?? "-//Wiggli//Calendar Invite Demo//EN"}`,
+    "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
+    ...inputs.flatMap((input) => veventLines(input, now)),
+    "END:VCALENDAR",
+  ];
   return lines.join("\r\n") + "\r\n";
 }

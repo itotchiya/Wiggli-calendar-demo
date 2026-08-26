@@ -211,3 +211,28 @@ export function htmlWithVarTokens(html: string): string {
   });
   return div.innerHTML;
 }
+
+/**
+ * Replace only the AI-owned paragraph in an otherwise user-edited invitation.
+ * If the user deleted the block, insert it immediately after the greeting.
+ */
+export function replaceSmartContextBlock(html: string, paragraph: string): string {
+  const root = document.createElement("div");
+  root.innerHTML = html;
+  const escaped = paragraph
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+  let block = root.querySelector<HTMLElement>('[data-smart-block="ai-context"]');
+  if (!block) {
+    block = document.createElement("div");
+    block.dataset.smartBlock = "ai-context";
+    const greeting = root.querySelector('[data-smart-block="greeting"]');
+    greeting?.after(block);
+    if (!greeting) root.prepend(block);
+  }
+  block.innerHTML = `<p>${escaped}</p>`;
+  return root.innerHTML;
+}

@@ -1,12 +1,12 @@
 # 📅 Wiggli Calendar — Custom iCalendar RSVP & Event Sync Demo
 
-A full-stack demo of **branded calendar invitations sent from your own Gmail** —
-bypassing Google Calendar's default gray invite emails while **keeping native
-RSVP syncing intact** (Yes / Maybe / No in Gmail, Outlook and Apple Calendar).
+A full-stack demo for comparing Gmail Smart Events, Workable-style Resend RSVP
+invitations, and native Google Calendar invitations while keeping attendee
+responses synchronized.
 
 ```
 Next.js 16 (App Router) · TypeScript · Tailwind v4 · shadcn/ui
-Prisma 7 + SQLite (driver adapter) · Auth.js v5 (Google OAuth) · googleapis
+Prisma 7 + PostgreSQL · Auth.js v5 (Google OAuth) · Google APIs · Resend SMTP
 ```
 
 ## How it works
@@ -47,7 +47,7 @@ Prisma 7 + SQLite (driver adapter) · Auth.js v5 (Google OAuth) · googleapis
 ```bash
 npm install
 cp .env.example .env          # then fill in the values (see below)
-npx prisma migrate dev        # creates prisma/dev.db
+npx prisma migrate deploy     # initializes your PostgreSQL database
 npm run dev                   # http://localhost:3000
 ```
 
@@ -77,7 +77,7 @@ npm run dev                   # http://localhost:3000
 | `GET/POST /api/rsvp/[t]` | One-click RSVP endpoint (HMAC-signed tokens) |
 | `/api/auth/*`            | Auth.js (Google provider, offline access) |
 
-## Data model (SQLite)
+## Data model (PostgreSQL)
 
 - **Event** — summary, times, timezone, `iCalUID` (unique, shared with Google),
   `googleEventId`, `sequence` (ICS SEQUENCE), custom subject/body overrides.
@@ -87,9 +87,47 @@ npm run dev                   # http://localhost:3000
   to Google even when the organizer is logged out.
 - **RsvpTokenLog** — audit trail of every button click.
 
+## Deploy to Vercel
+
+1. Import this GitHub repository into Vercel as a Next.js project.
+2. Connect a managed PostgreSQL database (Neon, Prisma Postgres, Supabase, or
+   another PostgreSQL provider).
+3. Add `DATABASE_URL` using the pooled runtime connection and `DIRECT_URL`
+   using the direct migration connection. If only one URL is provided, use it
+   for both variables.
+4. Add the remaining values from `.env.example` in **Project Settings →
+   Environment Variables**. Never commit real secrets.
+5. In Google Cloud, add the production OAuth redirect URI:
+   `https://YOUR-VERCEL-DOMAIN/api/auth/callback/google`.
+6. Set `NEXT_PUBLIC_APP_URL` to `https://YOUR-VERCEL-DOMAIN` and redeploy.
+7. In Resend, register `https://YOUR-VERCEL-DOMAIN/api/resend/inbound` for the
+   `email.received` event, then add its signing secret as
+   `RESEND_WEBHOOK_SECRET` and redeploy once more.
+
+`vercel.json` runs `prisma migrate deploy` before every production build, and
+`postinstall` regenerates Prisma Client for the deployment runtime.
+
+### Required Vercel environment variables
+
+```text
+DATABASE_URL
+DIRECT_URL
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+AUTH_SECRET
+NEXT_PUBLIC_APP_URL
+GEMINI_API_KEY
+RESEND_API_KEY
+RESEND_CALENDAR_DOMAIN
+RESEND_FROM_NAME
+RESEND_WEBHOOK_SECRET
+```
+
 ## Demo limitations (by design)
 
-- SQLite file DB, single organizer at a time, no background jobs.
+- Existing local SQLite demo rows are not copied into PostgreSQL automatically.
+- No background job queue; event creation and invitation delivery happen in
+  the request lifecycle.
 - NextAuth v5 beta keeps the access token in the session JWT; refresh happens on
   sign-in flow. For long-lived production use, persist tokens server-side.
 - Custom HTML bodies are sent verbatim (only the RSVP row is injected) — sanitize

@@ -93,8 +93,8 @@ export default function EventsPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Events &amp; RSVPs</h1>
           <p className="text-sm text-muted-foreground">
-            Native Yes / Maybe / No responses from Gmail, Outlook or Apple Calendar —
-            auto-synced every 15 seconds.
+            RSVP responses from Gmail, Outlook or Apple Calendar — auto-synced every
+            15 seconds.
           </p>
         </div>
         <Button onClick={syncAll} disabled={syncing || !session}>
