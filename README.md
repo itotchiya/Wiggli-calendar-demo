@@ -98,9 +98,10 @@ npm run dev                   # http://localhost:3000
 4. Add the remaining values from `.env.example` in **Project Settings →
    Environment Variables**. Never commit real secrets.
 5. In Google Cloud, add the production OAuth redirect URI:
-   `https://YOUR-VERCEL-DOMAIN/api/auth/callback/google`.
-6. Set `NEXT_PUBLIC_APP_URL` to `https://YOUR-VERCEL-DOMAIN` and redeploy.
-7. In Resend, register `https://YOUR-VERCEL-DOMAIN/api/resend/inbound` for the
+   `https://lalla.surf/api/auth/callback/google`.
+6. Connect `lalla.surf` to the Vercel project, set `NEXT_PUBLIC_APP_URL` to
+   `https://lalla.surf`, and redeploy.
+7. In Resend, register `https://lalla.surf/api/resend/inbound` for the
    `email.received` event, then add its signing secret as
    `RESEND_WEBHOOK_SECRET` and redeploy once more.
 
@@ -122,6 +123,17 @@ RESEND_CALENDAR_DOMAIN
 RESEND_FROM_NAME
 RESEND_WEBHOOK_SECRET
 ```
+
+Use these non-secret values for this deployment:
+
+```text
+NEXT_PUBLIC_APP_URL=https://lalla.surf
+RESEND_CALENDAR_DOMAIN=lalla.surf
+RESEND_FROM_NAME=Wiggli Calendar
+```
+
+Keep `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` only in Vercel environment
+variables. Do not commit either secret.
 
 ## Demo limitations (by design)
 
