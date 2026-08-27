@@ -51,8 +51,8 @@ const navItems: NavItem[] = [
   { label: "Placements", icon: FileText },
   { label: "Suppliers", icon: UsersRound, children: [{ label: "Search Suppliers" }, { label: "My Suppliers" }, { label: "Suppliers Management" }] },
   { label: "Calendar", icon: CalendarDays, href: "/dashboard/calendar" },
-  { label: "Settings", icon: Settings, children: [{ label: "My Profile" }, { label: "Users & Departments" }, { label: "Email Templates" }, { label: "Custom Fields Manager" }] },
-  { label: "Emailing (Testing)", icon: MailCheck },
+  { label: "Settings", icon: Settings, children: [{ label: "My Profile", href: "/dashboard/settings/profile" }, { label: "Users & Departments" }, { label: "Email Templates" }, { label: "Custom Fields Manager", href: "/dashboard/settings/custom-fields" }] },
+  { label: "Emailing (Testing)", icon: MailCheck, href: "/dashboard/settings/emailing" },
 ];
 
 export function WLogo({ full = false }: { full?: boolean }) {
