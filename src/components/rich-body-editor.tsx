@@ -27,29 +27,32 @@ export function RichBodyEditor({
   variables,
   disabled,
   generatingBlockSelector,
+  generating,
 }: {
   value: string;
   onChange: (html: string) => void;
   variables: EditorVariable[];
   disabled?: boolean;
-  /** CSS selector of the block that AI is currently rewriting — gets the
-   *  sentence-scoped neon glow instead of blurring the whole editor. */
+  /** CSS selector of the block that AI is currently rewriting. */
   generatingBlockSelector?: string;
+  /** True only while AI is actively generating — drives the neon overlay. */
+  generating?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [, force] = useState(0);
 
   // While generating, lay the neon overlay over the WHOLE text area.
+  // Driven by the explicit `generating` flag so it ALWAYS clears when done.
   useEffect(() => {
     if (!ref.current) return;
     ref.current.querySelectorAll(".ai-generating-block").forEach((el) => el.classList.remove("ai-generating-block"));
-    if (generatingBlockSelector) {
+    if (generating && generatingBlockSelector) {
       const editor = ref.current.closest(".rich-editor");
       const host = editor?.querySelector(".rich-content") ?? ref.current;
       host.classList.add("ai-generating-block");
     }
-  }, [generatingBlockSelector, value]);
+  }, [generating, generatingBlockSelector, value]);
 
   /** Wrap every [X.Y] token inside `root` as an atomic var chip. */
   const tokenizeAll = (root: HTMLElement) => {

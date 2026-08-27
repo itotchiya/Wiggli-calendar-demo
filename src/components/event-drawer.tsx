@@ -2090,6 +2090,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                       variables={availableVariables.map((v) => ({ tag: v.tag, hint: v.hint }))}
                       disabled={aiBusy}
                       generatingBlockSelector='[data-smart-block="ai-context"]'
+                      generating={aiBusy}
                     />
                   </div>
 
