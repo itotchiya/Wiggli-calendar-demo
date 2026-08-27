@@ -135,7 +135,7 @@ export async function listEvents(): Promise<EventDto[]> {
 /**
  * The heart of the demo:
  * 1. resolve wall-clock times → UTC instants
- * 2. insert the Google Calendar event — Smart Event uses sendUpdates:"all"
+ * 2. insert the Google Calendar event — always SILENT (sendUpdates:"none");
  *    (Google emails the native Yes/No/Maybe card); other flows use "none"
  * 3. persist event + attendees (sharing Google's iCalUID)
  * 4. build METHOD:REQUEST .ics around that UID
@@ -201,11 +201,12 @@ export async function createEventAndInvite(opts: {
     throw new Error("Start time must be in the future.");
   }
 
-  // 2. Google Calendar — Smart Event uses sendUpdates:"all" so Google
-  //    emails its own native invitation (the Yes/No/Maybe card that Gmail
-  //    renders at the top of the thread). Our branded MIME with ICS still
-  //    lands in the same thread via matching subject + threadId headers,
-  //    giving the hybrid that Workable uses: native card + rich email.
+  // 2. Google Calendar — created SILENT (sendUpdates:"none"): Google must NOT
+  //    email its own native invitation. The single invitation is the branded
+  //    Smart Event email below (its METHOD:REQUEST ICS gives Gmail the native
+  //    Yes/No/Maybe card). Sending "all" here duplicated every invite
+  //    (one Google-native + one Smart email). The Native creator mode is the
+  //    explicit choice for Google-only invitations (/api/native-events).
   const g = await createGoogleEvent(accessToken, {
     summary: input.summary,
     // Calendar description stays clean: the availability-options notice
@@ -221,7 +222,7 @@ export async function createEventAndInvite(opts: {
     attendees: input.attendees.map((a) => ({ email: a.email, name: a.name })),
     conference: opts.conference,
     reminderMinutes: opts.reminderMinutes ?? null,
-    sendUpdates: opts.smartDocument ? "all" : "none",
+    sendUpdates: "none",
   });
 
   // Single authoritative Meet link — the one Google provisioned on create.
