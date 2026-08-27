@@ -1416,56 +1416,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   margin-top: 8px;
 }
 
-/* ── AI generating feedback (sentence-scoped, light neon) ────────────────── */
+/* ── AI generating feedback (sentence-scoped, floating neon gradient) ────── */
 @keyframes ai-glow-pulse {
-  0%, 100% { background-position: 0% 50%; box-shadow: 0 0 0 rgba(20, 184, 166, 0); }
-  50% { box-shadow: 0 0 14px rgba(20, 184, 166, .35); }
+  0%, 100% { box-shadow: 0 0 0 rgba(57, 255, 130, 0); }
+  50% { box-shadow: 0 0 18px rgba(57, 255, 130, .5); }
 }
-.ai-generating-block {
-  position: relative;
-  border-radius: 8px;
-  background: linear-gradient(110deg,
-    rgba(204, 251, 241, 0) 0%,
-    rgba(153, 246, 228, .55) 28%,
-    rgba(45, 212, 191, .18) 42%,
-    rgba(153, 246, 228, .55) 58%,
-    rgba(204, 251, 241, 0) 100%);
-  background-size: 220% 100%;
-  animation: ai-glow-sweep 1.4s ease-in-out infinite;
+@keyframes ai-neon-sweep {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
 }
-@keyframes ai-glow-sweep {
-  0% { background-position: 120% 0; }
-  100% { background-position: -60% 0; }
-}
+/* Overlay layer sitting ON TOP of the text: blurred glass + moving neon beam */
+.ai-generating-block { position: relative; border-radius: 8px; }
 .ai-generating-block::after {
   content: "";
-  position: absolute; inset: -3px -6px;
+  position: absolute;
+  inset: -4px -8px;
   border-radius: 10px;
   pointer-events: none;
-  box-shadow: 0 0 0 1px rgba(45, 212, 191, .35), 0 0 16px rgba(45, 212, 191, .22);
-  animation: ai-glow-pulse 1.6s ease-in-out infinite;
-}
-.rich-content .ai-generating-block > * { filter: blur(2.5px); user-select: none; }
-.ai-neon-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid rgba(45, 212, 191, .65);
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 12px; font-weight: 650;
-  color: #0d9488;
-  background: linear-gradient(180deg, #f0fdfa, #ccfbf1);
-  box-shadow: 0 0 10px rgba(45, 212, 191, .30), inset 0 0 6px rgba(45, 212, 191, .16);
-  cursor: pointer;
-  transition: box-shadow .15s ease, border-color .15s ease, transform .1s ease;
-}
-.ai-neon-btn:hover:not(:disabled) {
-  border-color: rgba(20, 184, 166, .9);
-  box-shadow: 0 0 18px rgba(45, 212, 191, .5), inset 0 0 8px rgba(45, 212, 191, .22);
-}
-.ai-neon-btn:active:not(:disabled) { transform: translateY(1px); }
-.ai-neon-btn:disabled { opacity: .6; cursor: not-allowed; }
-.ai-neon-btn.busy {
-  animation: ai-glow-pulse 1.6s ease-in-out infinite;
+  backdrop-filter: blur(2.2px);
+  -webkit-backdrop-filter: blur(2.2px);
+  background:
+    linear-gradient(105deg,
+      rgba(57, 255, 130, 0) 12%,
+      rgba(57, 255, 130, .28) 34%,
+      rgba(190, 255, 210, .55) 46%,
+      rgba(27, 240, 120, .38) 54%,
+      rgba(57, 255, 130, .22) 62%,
+      rgba(57, 255, 130, 0) 86%);
+  background-size: 260% 100%;
+  box-shadow:
+    inset 0 0 0 1px rgba(57, 255, 130, .55),
+    0 0 14px rgba(57, 255, 130, .35),
+    0 0 30px rgba(57, 255, 130, .18);
+  animation: ai-neon-sweep 1.15s cubic-bezier(.45,.05,.55,.95) infinite, ai-glow-pulse 2s ease-in-out infinite;
+  mix-blend-mode: screen;
 }
 
 /* ── Rich body editor (Gmail-compose style) ─────────────────────────────── */
@@ -1499,3 +1483,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   user-select: all;
   vertical-align: baseline;
 }
+
+/* ── Light NEON GREEN action button (bright #39ff82, not mint) ───────────── */
+.ai-neon-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid rgba(57, 255, 130, .8);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px; font-weight: 700;
+  color: #0b3d1f;
+  background: linear-gradient(180deg, #eaffef, #c9ffd9);
+  box-shadow:
+    0 0 12px rgba(57, 255, 130, .55),
+    0 0 26px rgba(57, 255, 130, .25),
+    inset 0 0 8px rgba(57, 255, 130, .35);
+  cursor: pointer;
+  transition: box-shadow .15s ease, border-color .15s ease, transform .1s ease;
+}
+.ai-neon-btn:hover:not(:disabled) {
+  border-color: rgba(57, 255, 130, 1);
+  box-shadow:
+    0 0 20px rgba(57, 255, 130, .75),
+    0 0 42px rgba(57, 255, 130, .38),
+    inset 0 0 10px rgba(57, 255, 130, .45);
+}
+.ai-neon-btn:active:not(:disabled) { transform: translateY(1px); }
+.ai-neon-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ai-neon-btn.busy { animation: ai-glow-pulse 1.6s ease-in-out infinite; }

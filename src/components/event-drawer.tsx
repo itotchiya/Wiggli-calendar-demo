@@ -1688,12 +1688,16 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
     try {
       const document = documentOverride ?? smartDocument ?? buildSmartDocument();
       setSmartDocument(document);
+      // Minimum "thinking" window so the generating glow reads as AI work,
+      // even when the API answers instantly.
+      const minDuration = new Promise((resolve) => setTimeout(resolve, 2200));
       const res = await fetch("/api/invite-draft", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ document, instruction }),
       });
       const body = await res.json();
+      await minDuration;
       if (!res.ok) {
         notifyIfGoogleSessionExpired(res, body);
         throw new Error(body.error ?? `HTTP ${res.status}`);
