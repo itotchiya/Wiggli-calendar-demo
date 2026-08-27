@@ -1422,11 +1422,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   50% { box-shadow: 0 0 18px rgba(57, 255, 130, .5); }
 }
 @keyframes ai-neon-sweep {
-  0% { transform: translateX(-110%); }
-  100% { transform: translateX(320%); }
+  0% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
 }
-/* Overlay layer sitting ON TOP of the text: blurred glass + moving neon beam */
-.ai-generating-block { position: relative; border-radius: 8px; }
+/* Overlay layer covering the WHOLE text area: blurred glass + moving neon
+   gradient beam sweeping left-to-right, endlessly, while AI is generating. */
+.ai-generating-overlay-host { position: relative; }
 .ai-generating-block::after {
   content: "";
   position: absolute;
@@ -1438,18 +1439,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   background:
     linear-gradient(105deg,
       rgba(57, 255, 130, 0) 12%,
-      rgba(57, 255, 130, .28) 34%,
-      rgba(190, 255, 210, .55) 46%,
-      rgba(27, 240, 120, .38) 54%,
-      rgba(57, 255, 130, .22) 62%,
+      rgba(57, 255, 130, .26) 32%,
+      rgba(190, 255, 210, .5) 46%,
+      rgba(27, 240, 120, .36) 54%,
+      rgba(57, 255, 130, .2) 64%,
       rgba(57, 255, 130, 0) 86%);
-  background-size: 260% 100%;
+  background-size: 220% 100%;
   box-shadow:
-    inset 0 0 0 1px rgba(57, 255, 130, .55),
-    0 0 14px rgba(57, 255, 130, .35),
-    0 0 30px rgba(57, 255, 130, .18);
-  animation: ai-neon-sweep 1.15s cubic-bezier(.45,.05,.55,.95) infinite, ai-glow-pulse 2s ease-in-out infinite;
-  mix-blend-mode: screen;
+    inset 0 0 0 1px rgba(57, 255, 130, .45),
+    0 0 10px rgba(57, 255, 130, .25);
+  animation: ai-neon-sweep 1.8s linear infinite;
 }
 
 /* ── Rich body editor (Gmail-compose style) ─────────────────────────────── */
@@ -1484,29 +1483,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   vertical-align: baseline;
 }
 
-/* ── Light NEON GREEN action button (bright #39ff82, not mint) ───────────── */
+/* ── Light NEON GREEN action button: reduced shadow, moving gradient ────── */
 .ai-neon-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid rgba(57, 255, 130, .8);
+  position: relative;
+  border: 1px solid rgba(57, 255, 130, .55);
   border-radius: 8px;
   padding: 7px 12px;
   font-size: 12px; font-weight: 700;
   color: #0b3d1f;
-  background: linear-gradient(180deg, #eaffef, #c9ffd9);
-  box-shadow:
-    0 0 12px rgba(57, 255, 130, .55),
-    0 0 26px rgba(57, 255, 130, .25),
-    inset 0 0 8px rgba(57, 255, 130, .35);
+  background: linear-gradient(110deg,
+    #eaffef 0%, #d6ffe2 30%, #baffd0 50%, #d6ffe2 70%, #eaffef 100%);
+  background-size: 220% 100%;
+  animation: ai-btn-grad-slide 3.2s ease-in-out infinite alternate;
   cursor: pointer;
-  transition: box-shadow .15s ease, border-color .15s ease, transform .1s ease;
+  transition: transform .1s ease;
 }
-.ai-neon-btn:hover:not(:disabled) {
-  border-color: rgba(57, 255, 130, 1);
-  box-shadow:
-    0 0 20px rgba(57, 255, 130, .75),
-    0 0 42px rgba(57, 255, 130, .38),
-    inset 0 0 10px rgba(57, 255, 130, .45);
+@keyframes ai-btn-grad-slide {
+  0% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
 }
+.ai-neon-btn:hover:not(:disabled) { border-color: rgba(57, 255, 130, .9); }
 .ai-neon-btn:active:not(:disabled) { transform: translateY(1px); }
-.ai-neon-btn:disabled { opacity: .55; cursor: not-allowed; }
-.ai-neon-btn.busy { animation: ai-glow-pulse 1.6s ease-in-out infinite; }
+.ai-neon-btn:disabled { opacity: .55; cursor: not-allowed; animation: none; }

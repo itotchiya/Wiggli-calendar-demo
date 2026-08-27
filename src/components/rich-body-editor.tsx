@@ -40,12 +40,14 @@ export function RichBodyEditor({
   const savedRange = useRef<Range | null>(null);
   const [, force] = useState(0);
 
-  // While generating, tag ONLY the target block so just that sentence glows.
+  // While generating, lay the neon overlay over the WHOLE text area.
   useEffect(() => {
     if (!ref.current) return;
     ref.current.querySelectorAll(".ai-generating-block").forEach((el) => el.classList.remove("ai-generating-block"));
     if (generatingBlockSelector) {
-      ref.current.querySelector(generatingBlockSelector)?.classList.add("ai-generating-block");
+      const editor = ref.current.closest(".rich-editor");
+      const host = editor?.querySelector(".rich-content") ?? ref.current;
+      host.classList.add("ai-generating-block");
     }
   }, [generatingBlockSelector, value]);
 
