@@ -45,7 +45,6 @@ export function RichBodyEditor({
   // Tag the generating overlay on the editing area (kept in sync with DOM
   // re-renders by the sync effect below, which always re-applies it).
   const showOverlay = Boolean(generating && generatingBlockSelector);
-
   /** Wrap every [X.Y] token inside `root` as an atomic var chip. */
   const tokenizeAll = (root: HTMLElement) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -89,15 +88,8 @@ export function RichBodyEditor({
       // Propagate the chipped markup back so state === DOM (prevents loops).
       if (el.innerHTML !== value) onChange(el.innerHTML);
     }
-    // Re-apply the generating overlay AFTER any DOM replacement so the
-    // animated ::after layer is never wiped mid-run or left behind at end.
-    el.querySelectorAll(".ai-generating-block").forEach((n) => n.classList.remove("ai-generating-block"));
-    if (generating && generatingBlockSelector) {
-      const editor = el.closest(".rich-editor");
-      (editor?.querySelector(".rich-content") ?? el).classList.add("ai-generating-block");
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, generating]);
+  }, [value]);
 
 const saveSelection = () => {
     const sel = window.getSelection();
@@ -190,7 +182,7 @@ const saveSelection = () => {
       </div>
       <div
         ref={ref}
-        className="rich-content"
+        className={`rich-content ${showOverlay ? "ai-generating-block" : ""}`}
         contentEditable={!disabled}
         suppressContentEditableWarning
         onInput={emit}
