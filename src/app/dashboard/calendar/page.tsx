@@ -198,7 +198,7 @@ function CalendarGrid({ events, onSlot, onEventClick, weekDates, selectedDate }:
                     return (
                       <button
                         type="button"
-                        className="event-pill quarter-event event-pill--clickable"
+                        className={`event-pill quarter-event event-pill--clickable ${event.statusLabel === "Cancelled" ? "event-pill--cancelled" : ""}`}
                         style={{ top: `${(event.minute / 60) * HOUR_PX + 1}px`, height: `${Math.max(22, (duration / 60) * HOUR_PX - 2)}px`, zIndex: 10 + index }}
                         key={event.id}
                         onClick={(click) => { click.stopPropagation(); onEventClick(event); }}
