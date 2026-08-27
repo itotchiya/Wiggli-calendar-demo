@@ -26,31 +26,28 @@ export function RichBodyEditor({
   onChange,
   variables,
   disabled,
+  generatingBlockSelector,
 }: {
   value: string;
   onChange: (html: string) => void;
   variables: EditorVariable[];
   disabled?: boolean;
+  /** CSS selector of the block that AI is currently rewriting — gets the
+   *  sentence-scoped neon glow instead of blurring the whole editor. */
+  generatingBlockSelector?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [, force] = useState(0);
 
-  // Sync external value → DOM only when it differs structurally (e.g. AI rewrite).
-  // After loading, convert every [Variable] token into an atomic badge chip.
+  // While generating, tag ONLY the target block so just that sentence glows.
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (el.innerHTML !== value && normalize(value) !== normalize(el.innerHTML)) {
-      el.innerHTML = value || "";
-      tokenizeAll(el);
-      // Propagate the chipped markup back so state === DOM (prevents loops).
-      if (el.innerHTML !== value) onChange(el.innerHTML);
+    if (!ref.current) return;
+    ref.current.querySelectorAll(".ai-generating-block").forEach((el) => el.classList.remove("ai-generating-block"));
+    if (generatingBlockSelector) {
+      ref.current.querySelector(generatingBlockSelector)?.classList.add("ai-generating-block");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  const normalize = (s: string) => s.replace(/\s+/g, " ").replace(/> </g, "><").trim();
+  }, [generatingBlockSelector, value]);
 
   /** Wrap every [X.Y] token inside `root` as an atomic var chip. */
   const tokenizeAll = (root: HTMLElement) => {
@@ -83,7 +80,22 @@ export function RichBodyEditor({
     }
   };
 
-  const saveSelection = () => {
+    // Sync external value → DOM only when it differs structurally (e.g. AI rewrite).
+  // After loading, convert every [Variable] token into an atomic badge chip.
+  const normalize = (s: string) => s.replace(/\s+/g, " ").replace(/> </g, "><").trim();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.innerHTML !== value && normalize(value) !== normalize(el.innerHTML)) {
+      el.innerHTML = value || "";
+      tokenizeAll(el);
+      // Propagate the chipped markup back so state === DOM (prevents loops).
+      if (el.innerHTML !== value) onChange(el.innerHTML);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+const saveSelection = () => {
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && ref.current?.contains(sel.anchorNode)) {
       savedRange.current = sel.getRangeAt(0).cloneRange();

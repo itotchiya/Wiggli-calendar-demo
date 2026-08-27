@@ -2059,7 +2059,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                   <div className="invite-toolbar">
                     <button
                       type="button"
-                      className={`toolbar-btn ai-generate-btn ${aiBusy ? "busy" : ""}`}
+                      className={`ai-neon-btn ${aiBusy ? "busy" : ""}`}
                       onClick={() => void generateDrafts()}
                       disabled={aiBusy || !title.trim()}
                       title={!title.trim() ? "Add a title first" : "Rewrite the introduction while keeping the event details intact"}
@@ -2074,7 +2074,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                   )}
 
                   {/* Email Body Editor (Gmail-compose style, atomic var chips) */}
-                  <div className="invite-body-wrapper" style={{ position: "relative", background: "#fff" }}>
+                  <div className="invite-body-wrapper" style={{ position: "relative", background: "#fff", display: "flex", flexDirection: "column" }}>
                     <RichBodyEditor
                       value={emailBodies[activeInviteTab]}
                       onChange={(html) =>
@@ -2085,34 +2085,8 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                       }
                       variables={availableVariables.map((v) => ({ tag: v.tag, hint: v.hint }))}
                       disabled={aiBusy}
+                      generatingBlockSelector='[data-smart-block="ai-context"]'
                     />
-                    {aiBusy && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          background: "rgba(248,250,252,.82)",
-                          backdropFilter: "blur(2px)",
-                          display: "grid",
-                          placeItems: "center",
-                          borderRadius: 10,
-                          zIndex: 5,
-                        }}
-                      >
-                        <div style={{ textAlign: "center" }}>
-                          <Loader2 size={26} className="animate-spin" style={{ color: "#0f9d76" }} />
-                          <p style={{ margin: "8px 0 0", fontSize: 13, color: "#334155", fontWeight: 500 }}>
-                            AI is writing the context paragraph…
-                          </p>
-                          <p style={{ margin: "2px 0 0", fontSize: 11, color: "#8da0b9" }}>
-                            Your greeting, details, RSVP note and signature stay unchanged
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
                   </div>
 
                   {/* Variables available for THIS email (from the user's inputs) */}
