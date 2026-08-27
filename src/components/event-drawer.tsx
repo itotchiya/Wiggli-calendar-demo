@@ -4,7 +4,6 @@ import {
   AlarmClock,
   AlertTriangle,
   ArrowRight,
-  ArrowUpRight,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
@@ -1933,10 +1932,17 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                           </button>
                         );
                       })}
-                      <button type="button" role="menuitem" className="event-type-custom-option" onClick={() => { window.open("/settings/custom-fields?category=event-type", "_blank", "noopener,noreferrer"); setEventTypeMenuOpen(false); }} style={{ fontSize: 13 }}>
-                        <span style={{ fontSize: 13 }}>Add custom event type</span>
-                        <ArrowUpRight size={15} />
-                      </button>
+                      <div className="event-type-custom-option">
+                        <span className="event-type-custom-label">Customize your event types</span>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="event-type-custom-action"
+                          onClick={() => { window.open("/dashboard/settings/custom-fields?category=event-type", "_blank", "noopener,noreferrer"); setEventTypeMenuOpen(false); }}
+                        >
+                          <Plus size={13} /> Add custom type
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
