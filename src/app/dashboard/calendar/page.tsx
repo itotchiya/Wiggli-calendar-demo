@@ -358,6 +358,8 @@ export default function CalendarPage() {
         refreshing={syncing}
         onReschedule={(event) => {
           const pending = event.proposals?.[0] ?? null;
+          // Close the preview dialog — the reschedule drawer replaces it.
+          setPreviewEvent(null);
           setRescheduleTarget(pending ? { event, proposed: pending } : { event, proposed: null });
         }}
         onDeleted={() => {

@@ -7,11 +7,12 @@ import type { CalendarEventItem } from "@/lib/calendar-types";
 /**
  * Reschedule drawer (declined / proposed-time flow).
  *
- * Locked editing by design: title and attendee list are read-only context.
- * The only editable things are the new date/time (prefilled from the
- * attendee's proposed time when available) and an optional update note.
- * "Update & notify" moves the Google event with sendUpdates:"all" so every
- * attendee receives Google's native updated-invitation email with the note.
+ * Uses the SAME shell and UI classes as the main EventDrawer
+ * (drawer-scrim / event-drawer open / drawer-heading / drawer-body /
+ * drawer-footer) so it feels like the identical drawer, just scoped:
+ * title + attendees are locked, date/time prefilled from the proposal,
+ * optional note, and "Update & notify" moves the Google event with
+ * sendUpdates:"all" (native updated invitations to every attendee).
  */
 export function RescheduleDrawer({
   event,
@@ -20,17 +21,15 @@ export function RescheduleDrawer({
   onUpdated,
 }: {
   event: CalendarEventItem;
-  /** Proposed slot string (e.g. "Tue 2 Sep 2026, 14:00 – 14:30") to prefill, when rescheduling from a proposal. */
+  /** Proposed slot (from the Gmail notification) to show as prefill context. */
   proposed?: { attendeeEmail: string; slotLabel: string; note: string | null } | null;
   onClose: () => void;
   onUpdated: () => void;
 }) {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const defaultStart = proposed ? null : `${event.date}T${pad(event.hour)}:${pad(event.minute)}`;
-  const [startValue, setStartValue] = useState<string>(defaultStart ?? "");
-  const [endValue, setEndValue] = useState<string>(
-    `${event.date}T${pad(event.endHour)}:${pad(event.endMinute)}`
-  );
+  const datePart = event.date;
+  const [startValue, setStartValue] = useState<string>(`${datePart}T${pad(event.hour)}:${pad(event.minute)}`);
+  const [endValue, setEndValue] = useState<string>(`${datePart}T${pad(event.endHour)}:${pad(event.endMinute)}`);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +47,7 @@ export function RescheduleDrawer({
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            start: startValue.replace("T", " ") === startValue ? startValue : startValue,
+            start: startValue,
             end: endValue,
             timezone: event.timezone,
             note: note.trim() || undefined,
@@ -67,36 +66,30 @@ export function RescheduleDrawer({
   };
 
   return (
-    <div className="drawer-overlay" role="dialog" aria-modal="true" aria-label={`Reschedule ${event.title}`}>
-      <div className="drawer event-drawer drawer-open reschedule-drawer">
-        <div className="drawer-header">
-          <div>
-            <span className="drawer-kicker"><RefreshCw size={13} /> Reschedule</span>
-            <h2 className="drawer-title">{event.title}</h2>
-          </div>
-          <button type="button" className="preview-icon-btn preview-close" aria-label="Close" onClick={onClose}><X size={18} /></button>
+    <>
+      <button className={`drawer-scrim visible`} onClick={onClose} aria-label="Close reschedule drawer" />
+      <aside className="event-drawer open reschedule-drawer" aria-hidden={false} role="dialog" aria-label={`Reschedule ${event.title}`}>
+        <div className="drawer-heading">
+          <h2>Reschedule — {event.title}</h2>
+          <button onClick={onClose} aria-label="Close"><X size={17} /></button>
         </div>
 
-        <div className="drawer-body">
-          {proposed && (
-            <div className="reschedule-proposal-note">
-              <Clock size={14} />
-              <span>
-                Rescheduling to <strong>{proposed.slotLabel}</strong> — proposed by {proposed.attendeeEmail}.
-                {proposed.note ? <> Note: “{proposed.note}”</> : null}
-              </span>
-            </div>
-          )}
+        <div className="drawer-body reschedule-body">
+          <section className="drawer-form-column">
+            {proposed && (
+              <div className="reschedule-proposal-note">
+                <Clock size={14} />
+                <span>
+                  Proposed by attendee: <strong>{proposed.slotLabel}</strong>
+                  {proposed.note ? <> — “{proposed.note}”</> : null}
+                </span>
+              </div>
+            )}
 
-          {/* Title — locked */}
-          <div className="drawer-field-group">
-            <label className="drawer-field-label">Event title</label>
+            <label className="field-label"><span>Title</span></label>
             <div className="reschedule-locked-field"><Lock size={13} /> {event.title}</div>
-          </div>
 
-          {/* Date & time — the only editable schedule fields */}
-          <div className="drawer-field-group">
-            <label className="drawer-field-label">New date &amp; time <span className="required">*</span></label>
+            <label className="field-label" style={{ marginTop: 14 }}><span>New date &amp; time<span className="required-star">*</span></span></label>
             <div className="reschedule-time-grid">
               <div className="reschedule-time-field">
                 <span className="reschedule-time-label"><CalendarDays size={13} /> Start</span>
@@ -120,13 +113,10 @@ export function RescheduleDrawer({
               </div>
             </div>
             {proposed?.slotLabel && (
-              <p className="reschedule-proposed-hint">Proposed slot from the attendee: {proposed.slotLabel}</p>
+              <p className="reschedule-proposed-hint">Attendee proposed: {proposed.slotLabel}</p>
             )}
-          </div>
 
-          {/* Attendees — locked list */}
-          <div className="drawer-field-group">
-            <label className="drawer-field-label"><UsersRound size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} /> Attendees</label>
+            <label className="field-label" style={{ marginTop: 14 }}><span><UsersRound size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Attendees</span></label>
             <div className="reschedule-attendees">
               {event.previewAttendees.map((attendee) => (
                 <div className="reschedule-attendee-row" key={attendee.id}>
@@ -137,11 +127,8 @@ export function RescheduleDrawer({
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Optional note */}
-          <div className="drawer-field-group">
-            <label className="drawer-field-label">Update note <span className="reschedule-optional">(optional)</span></label>
+            <label className="field-label" style={{ marginTop: 14 }}><span>Update note <span className="reschedule-optional">(optional)</span></span></label>
             <textarea
               className="reschedule-note-input"
               rows={3}
@@ -151,18 +138,18 @@ export function RescheduleDrawer({
               aria-label="Update note"
             />
             <p className="reschedule-note-hint"><Info size={12} /> This note is sent with the update so attendees know why the time changed.</p>
-          </div>
 
-          {error && <div className="field-error" role="alert"><AlertCircle size={13} /> {error}</div>}
+            {error && <div className="field-error" role="alert"><AlertCircle size={13} /> {error}</div>}
+          </section>
         </div>
 
         <div className="drawer-footer">
-          <button className="text-button" type="button" onClick={onClose}>Cancel</button>
-          <button className="create-event-button" type="button" disabled={saving} onClick={submit}>
+          <button className="text-button" onClick={onClose}>Cancel</button>
+          <button className="create-event-button" disabled={saving} onClick={submit}>
             {saving ? "Updating…" : <>Update &amp; notify <RefreshCw size={17} strokeWidth={1.9} /></>}
           </button>
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }
