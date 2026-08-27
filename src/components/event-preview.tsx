@@ -16,6 +16,8 @@ import {
   Trash2,
   UserRound,
   UsersRound,
+  Clock,
+  AlertCircle,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -51,6 +53,7 @@ export function EventPreviewDialog({
   onClose,
   onRefresh,
   onDeleted,
+  onReschedule,
   refreshing = false,
 }: {
   event: CalendarEventItem | null;
@@ -58,6 +61,8 @@ export function EventPreviewDialog({
   onRefresh?: (event: CalendarEventItem) => void;
   /** Called after the event is cancelled & deleted so lists can refresh. */
   onDeleted?: () => void;
+  /** Opens the reschedule drawer for this event (declined flow). */
+  onReschedule?: (event: CalendarEventItem) => void;
   refreshing?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -87,6 +92,7 @@ export function EventPreviewDialog({
 
   const visibleAttendees = event.previewAttendees.slice(0, 3);
   const hiddenAttendees = event.previewAttendees.slice(3);
+  const declinedAttendee = event.previewAttendees.find((attendee) => attendee.status === "Declined");
 
   const handleDelete = async () => {
     if (!confirming) {
@@ -210,12 +216,37 @@ export function EventPreviewDialog({
           <div className="preview-description">{event.description || "No description was added."}</div>
         </div>
 
-        {event.previewAttendees.some((attendee) => attendee.status === "Declined") && (
-          <div className="preview-declined-bar">
-            <span className="preview-declined-label">{event.previewAttendees.find((attendee) => attendee.status === "Declined")?.name} declined</span>
-            <button type="button" className="preview-reschedule-btn" onClick={() => onRefresh?.(event)}><RefreshCw size={16} /> Sync again</button>
+        {(event.proposals?.length ?? 0) > 0 && (
+          <div className="preview-section">
+            <span className="preview-meta-label"><Clock size={16} /> Proposed time</span>
+            <div className="preview-proposals">
+              {event.proposals!.map((proposal) => {
+                const who = event.previewAttendees.find((a) => a.email.toLowerCase() === proposal.attendeeEmail);
+                return (
+                  <div className="preview-proposal-row" key={proposal.id}>
+                    <div className="preview-proposal-main">
+                      <span className="preview-proposal-who">{who?.name ?? proposal.attendeeEmail}</span>
+                      <span className="preview-proposal-dot">•</span>
+                      <span className="preview-proposal-label">Proposed time</span>
+                      <span className="preview-proposal-slot">{proposal.slotLabel}</span>
+                      {proposal.note && <span className="preview-proposal-note">“{proposal.note}”</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
+
+        {declinedAttendee && !isCancelled && (
+          <div className="preview-declined-bar">
+            <span className="preview-declined-error"><AlertCircle size={14} /> {declinedAttendee.name} declined this invitation.</span>
+            {onReschedule && (
+              <button type="button" className="preview-reschedule-btn" onClick={() => onReschedule(event)}><RefreshCw size={15} /> Reschedule</button>
+            )}
+          </div>
+        )}
+
 
         {isCancelled && (
           <div className="preview-cancelled-banner">

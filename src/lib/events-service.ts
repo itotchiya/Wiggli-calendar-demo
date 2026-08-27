@@ -113,6 +113,14 @@ function toDto(e: EventRow): EventDto {
     organizerEmail: e.organizerEmail,
     status: (e as { status?: string }).status === "CANCELLED" ? "CANCELLED" : "SCHEDULED",
     createdAt: e.createdAt.toISOString(),
+    proposals: ((e as { proposals?: { id: string; attendeeEmail: string; slotLabel: string; note: string | null; status: string; createdAt: Date }[] }).proposals ?? []).map((p) => ({
+      id: p.id,
+      attendeeEmail: p.attendeeEmail,
+      slotLabel: p.slotLabel,
+      note: p.note,
+      status: (p.status === "ACCEPTED" || p.status === "DISMISSED" ? p.status : "PENDING") as "PENDING" | "ACCEPTED" | "DISMISSED",
+      createdAt: p.createdAt.toISOString(),
+    })),
     attendees: e.attendees.map<AttendeeDto>((a) => ({
       id: a.id,
       email: a.email,
@@ -126,10 +134,18 @@ function toDto(e: EventRow): EventDto {
 
 export async function listEvents(): Promise<EventDto[]> {
   const rows = await db.event.findMany({
-    include: { attendees: true },
+    include: { attendees: true, proposals: { orderBy: { createdAt: "desc" } } },
     orderBy: { start: "asc" },
   });
   return rows.map(toDto);
+}
+
+/** Pending counter-proposals for one event (for the preview dialog). */
+export async function listEventProposals(eventId: string) {
+  return db.eventProposal.findMany({
+    where: { eventId, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 /**

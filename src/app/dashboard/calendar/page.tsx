@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/chrome";
 import { CreatorDialog, type CreatorMode } from "@/components/creator-dialog";
+import { RescheduleDrawer } from "@/components/reschedule-drawer";
 import { EventDrawer } from "@/components/event-drawer";
 import { EventPreviewDialog } from "@/components/event-preview";
 import type { CalendarEventItem, PreviewStatus } from "@/lib/calendar-types";
@@ -93,6 +94,13 @@ function mapEvent(event: EventDto): CalendarEventItem {
     organizerInitials: initials(event.organizerEmail),
     eventType: event.eventType ?? (event.summary.toLowerCase().includes("interview") ? "Interview" : "Meeting"),
     statusLabel: (event as { status?: string }).status === "CANCELLED" ? "Cancelled" : "Scheduled",
+    proposals: (event.proposals ?? []).filter((p) => p.status === "PENDING").map((p) => ({
+      id: p.id,
+      attendeeEmail: p.attendeeEmail,
+      slotLabel: p.slotLabel,
+      note: p.note,
+      createdAt: p.createdAt,
+    })),
     reminderLabel: event.reminderMinutes == null ? "Calendar default" : `${event.reminderMinutes} minutes before`,
     eventUrl: event.hangoutLink ?? (event.location?.startsWith("http") ? event.location : undefined),
     previewAttendees: event.attendees.map((attendee, index) => ({
@@ -243,6 +251,7 @@ export default function CalendarPage() {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [creatorMode, setCreatorMode] = useState<CreatorMode>("smart");
+  const [rescheduleTarget, setRescheduleTarget] = useState<{ event: CalendarEventItem; proposed: { attendeeEmail: string; slotLabel: string; note: string | null } | null } | null>(null);
   const [previewEvent, setPreviewEvent] = useState<CalendarEventItem | null>(null);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -309,6 +318,18 @@ export default function CalendarPage() {
         <MainCalendar events={events} selectedDate={selectedDate} onSelectDate={setSelectedDate} onSlot={openCreator} onEventClick={setPreviewEvent} />
       </div>
       <CreatorDialog open={chooserOpen} onClose={() => setChooserOpen(false)} onSelect={chooseCreator} />
+      {rescheduleTarget && (
+        <RescheduleDrawer
+          event={rescheduleTarget.event}
+          proposed={rescheduleTarget.proposed}
+          onClose={() => setRescheduleTarget(null)}
+          onUpdated={() => {
+            setRescheduleTarget(null);
+            void loadEvents();
+            window.setTimeout(() => void loadEvents(), 1800);
+          }}
+        />
+      )}
       <EventDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -325,6 +346,10 @@ export default function CalendarPage() {
         onClose={() => setPreviewEvent(null)}
         onRefresh={(event) => void syncEvent(event)}
         refreshing={syncing}
+        onReschedule={(event) => {
+          const pending = event.proposals?.[0] ?? null;
+          setRescheduleTarget(pending ? { event, proposed: pending } : { event, proposed: null });
+        }}
         onDeleted={() => {
           void loadEvents();
           // Keep the dialog open showing the cancelled state, but refresh the

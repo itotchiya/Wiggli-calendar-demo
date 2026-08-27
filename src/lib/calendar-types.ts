@@ -28,4 +28,6 @@ export type CalendarEventItem = {
   reminderLabel?: string;
   eventUrl?: string;
   previewAttendees: CalendarAttendee[];
+  /** Pending "Propose a new time" counter-proposals (from Gmail notifications). */
+  proposals?: { id: string; attendeeEmail: string; slotLabel: string; note: string | null; createdAt: string }[];
 };

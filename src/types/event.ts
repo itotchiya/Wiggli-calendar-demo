@@ -28,6 +28,15 @@ export type AttendeeDto = {
   respondedAt: string | null;
 };
 
+export type ProposalDto = {
+  id: string;
+  attendeeEmail: string;
+  slotLabel: string;
+  note: string | null;
+  status: "PENDING" | "ACCEPTED" | "DISMISSED";
+  createdAt: string;
+};
+
 export type EventDto = {
   id: string;
   googleEventId: string | null;
@@ -45,4 +54,5 @@ export type EventDto = {
   status: "SCHEDULED" | "CANCELLED";
   createdAt: string;
   attendees: AttendeeDto[];
+  proposals: ProposalDto[];
 };

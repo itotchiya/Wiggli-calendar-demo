@@ -28,14 +28,38 @@ model Event {
   organizerEmail String
   sequence       Int      @default(0) // ICS SEQUENCE — bumped on each re-send/update
   status         String   @default("SCHEDULED") // SCHEDULED | CANCELLED — local mirror of Google event status
+  /** ISO datetime of the latest accepted reschedule (null = never rescheduled). */
+  rescheduledAt  DateTime?
+  /** Organizer note included with the last "update & notify" reschedule. */
+  rescheduleNote String?
   hangoutLink    String? // real Google Meet URL when a conference was provisioned
   reminderMinutes Int? // null = calendar default; stored for email rendering
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   attendees Attendee[]
+  proposals EventProposal[]
 
   @@index([googleEventId])
+}
+
+/** A "Propose a new time" counter-proposal detected from the organizer's Gmail. */
+model EventProposal {
+  id            String   @id @default(cuid())
+  eventId       String
+  attendeeEmail String
+  /** Human-readable proposed slot as Google stated it, e.g. "Tue 2 Sep 2026, 14:00 – 14:30". */
+  slotLabel     String
+  /** Optional note the attendee added to the proposal. */
+  note          String?
+  /** gmail-notification | manual (future in-app proposals) */
+  source        String   @default("gmail-notification")
+  status        String   @default("PENDING") // PENDING | ACCEPTED | DISMISSED
+  createdAt     DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
 }
 
 model Attendee {

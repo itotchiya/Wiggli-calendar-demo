@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { syncAllEvents, syncEventById } from "@/lib/sync-service";
 import { syncInboundGmailReplies } from "@/lib/google/gmail-replies";
+import { syncInboundProposals } from "@/lib/google/proposal-sync";
 
 /**
  * Mirror native calendar RSVP responses into SQLite.
@@ -49,10 +50,24 @@ export async function POST(req: Request) {
       ? (await syncEventById(session.accessToken, eventId)).result
       : await syncAllEvents(session.accessToken);
 
+    // "Propose a new time" notifications live only in Gmail (the Calendar API
+    // never exposes counter-proposals) — scan them in the same pass.
+    let proposals;
+    try {
+      proposals = await syncInboundProposals(
+        session.accessToken,
+        session.user.email.toLowerCase(),
+        eventId
+      );
+    } catch (error) {
+      proposals = { scannedMessages: 0, newProposals: 0, errors: [(error as Error).message] };
+    }
+
     return NextResponse.json({
-      ok: result.errors.length === 0 && inboundReplies.errors.length === 0,
+      ok: result.errors.length === 0 && inboundReplies.errors.length === 0 && proposals.errors.length === 0,
       ...result,
       inboundReplies,
+      proposals,
     });
   } catch (err) {
     console.error("[sync]", err);
