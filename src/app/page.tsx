@@ -1,32 +1,26 @@
 import Link from "next/link";
 import {
   CalendarDays,
-  Ban,
-  Palette,
+  Check,
+  Mail,
   RefreshCw,
-  ArrowRight,
 } from "lucide-react";
 
 const FEATURES = [
   {
-    icon: Ban,
-    title: "No gray invites",
-    body: "Events are created with sendUpdates:\u0022none\u0022 — Google's default plain invite email is suppressed entirely.",
-  },
-  {
-    icon: Palette,
-    title: "Your brand, your email",
-    body: "Branded HTML invitations (or fully custom bodies) delivered from your own Gmail via the Gmail API.",
-  },
-  {
-    icon: CalendarDays,
+    icon: Check,
     title: "Native RSVP syncing",
     body: "A METHOD:REQUEST .ics rides along with every email — Gmail, Outlook and Apple Calendar all offer Yes / Maybe / No.",
   },
   {
+    icon: Mail,
+    title: "Your brand, your email",
+    body: "Branded HTML invitations delivered straight from your own Gmail via the Gmail API.",
+  },
+  {
     icon: RefreshCw,
     title: "Statuses in one place",
-    body: "One-click buttons in the email hit our API instantly; a Sync button pulls native calendar responses too.",
+    body: "Attendee replies flow into the events dashboard automatically — no chasing anyone.",
   },
 ];
 
@@ -40,10 +34,10 @@ export default function Home() {
             Wiggli <span className="font-normal text-muted-foreground">Calendar</span>
           </span>
           <Link
-            href="/dashboard/create"
+            href="/dashboard/calendar"
             className="ml-auto rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
           >
-            Open dashboard
+            Open calendar
           </Link>
         </div>
       </header>
@@ -61,20 +55,14 @@ export default function Home() {
         </p>
         <div className="mt-8 flex justify-center gap-3">
           <Link
-            href="/dashboard/create"
+            href="/dashboard/calendar"
             className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow"
           >
-            Create an event <ArrowRight className="size-4" />
-          </Link>
-          <Link
-            href="/dashboard/events"
-            className="rounded-md border px-5 py-2.5 text-sm font-medium hover:bg-accent"
-          >
-            View RSVPs
+            Open calendar
           </Link>
         </div>
 
-        <div className="mx-auto mt-16 grid max-w-4xl gap-4 text-left sm:grid-cols-2">
+        <div className="mx-auto mt-16 grid max-w-4xl gap-4 text-left sm:grid-cols-3">
           {FEATURES.map((f) => (
             <div key={f.title} className="rounded-xl border p-5">
               <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
