@@ -136,12 +136,6 @@ export function EventPreviewDialog({
           </div>
         </div>
 
-        {isCancelled && (
-          <div className="preview-cancelled-banner">
-            <X size={14} />
-            <span>This event was cancelled — attendees were notified and the invitation was removed from their calendars.</span>
-          </div>
-        )}
         {deleteError && (
           <div className="field-error" role="alert">{deleteError}</div>
         )}
@@ -221,6 +215,15 @@ export function EventPreviewDialog({
             <span className="preview-declined-label">{event.previewAttendees.find((attendee) => attendee.status === "Declined")?.name} declined</span>
             <button type="button" className="preview-reschedule-btn" onClick={() => onRefresh?.(event)}><RefreshCw size={16} /> Sync again</button>
           </div>
+        )}
+
+        {isCancelled && (
+          <div className="preview-cancelled-banner">
+            <span>This event was cancelled — attendees were notified and the invitation was removed from their calendars.</span>
+          </div>
+        )}
+        {deleteError && (
+          <div className="field-error" role="alert">{deleteError}</div>
         )}
       </div>
     </div>
