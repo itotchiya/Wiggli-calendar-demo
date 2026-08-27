@@ -1428,13 +1428,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 /* Overlay layer covering the WHOLE text area: blurred glass + moving neon
    gradient beam sweeping left-to-right, endlessly, while AI is generating. */
 .ai-generating-overlay-host { position: relative; }
+.ai-generating-block { border-radius: 10px !important; overflow: hidden; }
 .ai-generating-block::after {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 0;
   pointer-events: none;
-  overflow: hidden;
   backdrop-filter: blur(2.2px);
   -webkit-backdrop-filter: blur(2.2px);
   background:
