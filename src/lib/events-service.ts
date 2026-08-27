@@ -76,6 +76,7 @@ type EventRow = {
   timezone: string;
   organizerEmail: string;
   sequence: number;
+  status: string | null;
   createdAt: Date;
   attendees: {
     id: string;
@@ -110,6 +111,7 @@ function toDto(e: EventRow): EventDto {
     end: e.end.toISOString(),
     timezone: e.timezone,
     organizerEmail: e.organizerEmail,
+    status: (e as { status?: string }).status === "CANCELLED" ? "CANCELLED" : "SCHEDULED",
     createdAt: e.createdAt.toISOString(),
     attendees: e.attendees.map<AttendeeDto>((a) => ({
       id: a.id,

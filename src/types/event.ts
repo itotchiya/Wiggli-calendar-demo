@@ -42,6 +42,7 @@ export type EventDto = {
   end: string;
   timezone: string;
   organizerEmail: string;
+  status: "SCHEDULED" | "CANCELLED";
   createdAt: string;
   attendees: AttendeeDto[];
 };

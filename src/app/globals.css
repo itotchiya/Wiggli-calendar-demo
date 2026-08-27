@@ -1256,6 +1256,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .preview-organizer { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500; color: #273246; }
 .preview-organizer-avatar { width: 32px; height: 32px; border-radius: 50%; background: #f59e0b; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .preview-status-pill { align-self: flex-start; padding: 4px 12px; border-radius: 999px; border: 1.5px solid #f59e0b; color: #d97706; background: #fffbeb; font-size: 12px; font-weight: 600; }
+.preview-status-pill.cancelled { border-color: #e5484d; color: #c62a30; background: #feecec; }
+.preview-delete-btn { color: #d94848; }
+.preview-delete-btn:hover, .preview-delete-btn.confirming { background: #feecec !important; color: #b91c1c !important; }
+.preview-cancelled-banner { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 9px; background: #feecec; border: 1px solid #f5c2c4; color: #b32a30; font-size: 12px; font-weight: 600; }
 .preview-date { font-size: 12.5px; font-weight: 600; color: #273246; line-height: 1.6; }
 .preview-reminder { font-size: 12.5px; color: #71809a; }
 .preview-section { margin-top: 18px; }

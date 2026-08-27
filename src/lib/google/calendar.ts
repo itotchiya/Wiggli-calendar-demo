@@ -113,6 +113,28 @@ export type GoogleAttendeeStatus = {
   respondedAt: string | null;
 };
 
+/**
+ * Cancel (delete) an event on the organizer's primary calendar.
+ * Per Google docs, events.delete with sendUpdates:"all" emails every guest a
+ * cancellation notice — Google Calendar guests see the event removed/declined
+ * as cancelled, external guests receive a METHOD:CANCEL email that removes
+ * their copy. On the organizer's calendar the event remains with status
+ * "cancelled" (greyed out in the UI).
+ */
+export async function cancelGoogleEvent(
+  accessToken: string,
+  googleEventId: string,
+  sendUpdates: "all" | "externalOnly" | "none" = "all"
+): Promise<void> {
+  const authClient = getGoogleClient(accessToken);
+  const calendar = google.calendar({ version: "v3", auth: authClient });
+  await calendar.events.delete({
+    calendarId: "primary",
+    eventId: googleEventId,
+    sendUpdates,
+  });
+}
+
 /** Pull authoritative RSVP statuses straight from the Google event. */
 export async function fetchEventRsvp(
   accessToken: string,

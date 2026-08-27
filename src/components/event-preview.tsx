@@ -13,6 +13,7 @@ import {
   MessageSquareText,
   RefreshCw,
   Tag,
+  Trash2,
   UserRound,
   UsersRound,
   X,
@@ -46,28 +47,69 @@ function formatPreviewDate(date: string, hour: number, minute: number) {
 }
 
 export function EventPreviewDialog({
-  event,
+  event: initialEvent,
   onClose,
   onRefresh,
+  onDeleted,
   refreshing = false,
 }: {
   event: CalendarEventItem | null;
   onClose: () => void;
   onRefresh?: (event: CalendarEventItem) => void;
+  /** Called after the event is cancelled & deleted so lists can refresh. */
+  onDeleted?: () => void;
   refreshing?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Local view of the event so a just-cancelled state renders instantly.
+  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!event) return;
+    if (!initialEvent) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [event, onClose]);
+  }, [initialEvent, onClose]);
 
-  if (!event) return null;
+  if (!initialEvent) return null;
+
+  const isCancelled =
+    initialEvent.statusLabel === "Cancelled" ||
+    cancelledIds.has(initialEvent.id) ||
+    initialEvent.id.startsWith("preview") === false && (initialEvent as { status?: string }).status === "CANCELLED";
+
+  const event = isCancelled
+    ? { ...initialEvent, statusLabel: "Cancelled" }
+    : initialEvent;
+
   const visibleAttendees = event.previewAttendees.slice(0, 3);
   const hiddenAttendees = event.previewAttendees.slice(3);
+
+  const handleDelete = async () => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(initialEvent.id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
+      setCancelledIds((prev) => new Set(prev).add(initialEvent.id));
+      setConfirming(false);
+      onDeleted?.();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to cancel event");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="preview-scrim" onClick={() => { setExpanded(false); onClose(); }} role="presentation">
@@ -79,9 +121,30 @@ export function EventPreviewDialog({
                 {refreshing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
               </button>
             )}
-            <button className="preview-icon-btn preview-close" aria-label="Close" onClick={() => { setExpanded(false); onClose(); }}><X size={18} /></button>
+            {!isCancelled && onDeleted && (
+              <button
+                className={`preview-icon-btn preview-delete-btn ${confirming ? "confirming" : ""}`}
+                aria-label={confirming ? "Confirm: cancel & delete event" : "Cancel and delete event"}
+                title={confirming ? "Click again to confirm cancellation" : "Cancel & delete this event"}
+                disabled={deleting}
+                onClick={() => void handleDelete()}
+              >
+                {deleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+              </button>
+            )}
+            <button className="preview-icon-btn preview-close" aria-label="Close" onClick={() => { setExpanded(false); setConfirming(false); onClose(); }}><X size={18} /></button>
           </div>
         </div>
+
+        {isCancelled && (
+          <div className="preview-cancelled-banner">
+            <X size={14} />
+            <span>This event was cancelled — attendees were notified and the invitation was removed from their calendars.</span>
+          </div>
+        )}
+        {deleteError && (
+          <div className="field-error" role="alert">{deleteError}</div>
+        )}
 
         <h2 className="preview-title">
           {event.title}
@@ -100,7 +163,7 @@ export function EventPreviewDialog({
           </div>
           <div className="preview-meta">
             <span className="preview-meta-label"><CalendarDays size={16} /> Status <span className="preview-info-icon" title="Live event status"><Info size={12} /></span></span>
-            <span className="preview-status-pill">{event.statusLabel ?? "Scheduled"}</span>
+            <span className={`preview-status-pill ${isCancelled ? "cancelled" : ""}`}>{event.statusLabel ?? "Scheduled"}</span>
           </div>
         </div>
 

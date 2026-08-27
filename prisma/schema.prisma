@@ -27,6 +27,7 @@ model Event {
   emailHtml      String? // custom HTML body overriding the default branded template
   organizerEmail String
   sequence       Int      @default(0) // ICS SEQUENCE — bumped on each re-send/update
+  status         String   @default("SCHEDULED") // SCHEDULED | CANCELLED — local mirror of Google event status
   hangoutLink    String? // real Google Meet URL when a conference was provisioned
   reminderMinutes Int? // null = calendar default; stored for email rendering
   createdAt      DateTime @default(now())

@@ -92,7 +92,7 @@ function mapEvent(event: EventDto): CalendarEventItem {
     organizerName: event.organizerEmail.split("@")[0],
     organizerInitials: initials(event.organizerEmail),
     eventType: event.eventType ?? (event.summary.toLowerCase().includes("interview") ? "Interview" : "Meeting"),
-    statusLabel: "Scheduled",
+    statusLabel: (event as { status?: string }).status === "CANCELLED" ? "Cancelled" : "Scheduled",
     reminderLabel: event.reminderMinutes == null ? "Calendar default" : `${event.reminderMinutes} minutes before`,
     eventUrl: event.hangoutLink ?? (event.location?.startsWith("http") ? event.location : undefined),
     previewAttendees: event.attendees.map((attendee, index) => ({
@@ -320,7 +320,18 @@ export default function CalendarPage() {
           window.setTimeout(() => void loadEvents(), 1800);
         }}
       />
-      <EventPreviewDialog event={previewEvent} onClose={() => setPreviewEvent(null)} onRefresh={(event) => void syncEvent(event)} refreshing={syncing} />
+      <EventPreviewDialog
+        event={previewEvent}
+        onClose={() => setPreviewEvent(null)}
+        onRefresh={(event) => void syncEvent(event)}
+        refreshing={syncing}
+        onDeleted={() => {
+          void loadEvents();
+          // Keep the dialog open showing the cancelled state, but refresh the
+          // underlying list a beat later to pick up the CANCELLED status.
+          window.setTimeout(() => void loadEvents(), 600);
+        }}
+      />
     </>
   );
 }
