@@ -203,10 +203,20 @@ function CalendarGrid({ events, onSlot, onEventClick, weekDates, selectedDate }:
                   })}
                   {matching.map((event, index) => {
                     const duration = Math.max(15, event.endHour * 60 + event.endMinute - (event.hour * 60 + event.minute));
+                    // Slot colour reflects the live event state so the user can
+                    // scan the week: cancelled (red strikethrough), any attendee
+                    // declined (red), pending proposal (blue dashed), all
+                    // accepted (green), otherwise default mint.
+                    const stateClass =
+                      event.statusLabel === "Cancelled" ? "event-pill--cancelled"
+                      : event.previewAttendees.some((a) => a.status === "Declined") ? "event-pill--declined"
+                      : (event.proposals?.length ?? 0) > 0 ? "event-pill--proposed"
+                      : event.previewAttendees.length > 0 && event.previewAttendees.every((a) => a.status === "Accepted") ? "event-pill--accepted"
+                      : "";
                     return (
                       <button
                         type="button"
-                        className={`event-pill quarter-event event-pill--clickable ${event.statusLabel === "Cancelled" ? "event-pill--cancelled" : ""}`}
+                        className={`event-pill quarter-event event-pill--clickable ${stateClass}`}
                         style={{ top: `${(event.minute / 60) * HOUR_PX + 1}px`, height: `${Math.max(22, (duration / 60) * HOUR_PX - 2)}px`, zIndex: 10 + index }}
                         key={event.id}
                         onClick={(click) => { click.stopPropagation(); onEventClick(event); }}
