@@ -834,28 +834,7 @@ function LinkedToSection({ records, onAdd, onRemove, disabled = false }: { recor
                 </div>
               </div>
             )}
-            {filteredItems.length === 0 && !isEmptyDueToRelation && query.trim() === "" && <p style={{ padding: "12px", textAlign: "center", color: "#8a95a8", fontSize: 13 }}>No results found</p>}
-            {isEmptyDueToRelation && menu === "Job" && anchor?.type === "Candidate" && !showAllJobs && (
-              <div style={{ display: "grid", gap: 0 }}>
-                <p style={{ color: "#8a95a8", fontSize: 13, margin: 0, textAlign: "center", padding: "12px 12px 10px" }}>{anchor.item.name} is not linked to any job</p>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", borderTop: "1px solid #f1f5f9" }}>
-                  <span style={{ color: "#8a95a8", fontSize: 12 }}>Candidate is not linked</span>
-                  <button type="button" onClick={() => setShowAllJobs(true)} style={{ background: "#fff", border: "1px solid #d9e0e8", borderRadius: 4, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4, color: "#475569", fontSize: 11, cursor: "pointer", flex: "none" }}><Plus size={10} /> Add to a job</button>
-                </div>
-              </div>
-            )}
-            {isEmptyDueToRelation && menu === "Opportunity" && anchor?.type === "Candidate" && !showAllOpps && (
-              <div style={{ display: "grid", gap: 0 }}>
-                <p style={{ color: "#8a95a8", fontSize: 13, margin: 0, textAlign: "center", padding: "12px 12px 10px" }}>{anchor.item.name} is not linked to any opportunity</p>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", borderTop: "1px solid #f1f5f9" }}>
-                  <span style={{ color: "#8a95a8", fontSize: 12 }}>Candidate is not linked</span>
-                  <button type="button" onClick={() => setShowAllOpps(true)} style={{ background: "#fff", border: "1px solid #d9e0e8", borderRadius: 4, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4, color: "#475569", fontSize: 11, cursor: "pointer", flex: "none" }}><Plus size={10} /> Browse opportunities</button>
-                </div>
-              </div>
-            )}
-            {isEmptyDueToRelation && !(menu === "Job" && anchor?.type === "Candidate") && !(menu === "Opportunity" && anchor?.type === "Candidate") && (
-              <p style={{ padding: "14px 12px", textAlign: "center", color: "#8a95a8", fontSize: 13 }}>This {anchor?.type.toLowerCase() ?? "record"} is not linked to any {menu?.toLowerCase()}</p>
-            )}
+            {filteredItems.length === 0 && query.trim() === "" && <p style={{ padding: "12px", textAlign: "center", color: "#8a95a8", fontSize: 13 }}>No results found</p>}
           </div>
         </div>
       )}
