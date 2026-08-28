@@ -814,25 +814,6 @@ function LinkedToSection({ records, onAdd, onRemove, disabled = false }: { recor
               if (menu === "Organization") {
                 return <button type="button" onClick={() => { onAdd(menu as RelatedToType, item); setMenu(null); setQuery(""); setShowAllJobs(false); setShowAllOpps(false); }} key={item.id}><span className={`organization-mark organization-${item.id}`} style={{ width: 29, height: 29, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700, flex: "none" }}>{item.initials}</span><span style={{ gap: 1 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{item.name}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{item.relationship}</small></span></button>;
               }
-              if (menu === "Opportunity" && anchor?.type === "Candidate") {
-                return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", width: "100%" }}>
-                    <span style={{ width: 29, height: 29, borderRadius: 6, background: "#e6ecf2", display: "grid", placeItems: "center", color: "#078c80", flex: "none" }}><Target size={14} /></span>
-                    <span style={{ flex: 1, gap: 1, display: "flex", flexDirection: "column", minWidth: 0 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{item.title}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{item.contract} • {item.organization}</small></span>
-                    <button type="button" onClick={() => { openSubmitPage(anchor.item.name, anchor.item.id, item.id, item.title); setMenu(null); setQuery(""); setShowAllOpps(false); }} style={{ background: "#fff", border: "1px solid #d9e0e8", borderRadius: 4, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4, color: "#475569", fontSize: 11, cursor: "pointer", flex: "none" }}><Plus size={10} /> Submit</button>
-                  </div>
-                );
-              }
-              if (menu === "Job" && anchor?.type === "Candidate") {
-                const isAdding = addingJobId === item.id;
-                return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", width: "100%" }}>
-                    <span style={{ width: 29, height: 29, borderRadius: 6, background: "#e6ecf2", display: "grid", placeItems: "center", color: "#078c80", flex: "none" }}><BriefcaseBusiness size={14} /></span>
-                    <span style={{ flex: 1, gap: 1, display: "flex", flexDirection: "column", minWidth: 0 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{item.title}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{item.contract} • {item.organization}</small></span>
-                    <button type="button" disabled={isAdding} onClick={() => { if (isAdding) return; setAddingJobId(item.id); window.setTimeout(() => { onAdd("Job", item); setMenu(null); setQuery(""); setShowAllJobs(false); setAddingJobId(null); }, 1400); }} style={{ background: isAdding ? "#f1f5f9" : "#fff", border: "1px solid #d9e0e8", borderRadius: 4, padding: "3px 7px", display: "inline-flex", alignItems: "center", gap: 4, color: isAdding ? "#94a3b8" : "#475569", fontSize: 11, cursor: isAdding ? "default" : "pointer", flex: "none" }}>{isAdding ? <><Loader2 size={10} className="animate-spin" /> Adding</> : <><Plus size={10} /> Add</>}</button>
-                  </div>
-                );
-              }
               return <button type="button" onClick={() => { onAdd(menu as RelatedToType, item); setMenu(null); setQuery(""); setShowAllJobs(false); setShowAllOpps(false); }} key={item.id}><span style={{ width: 29, height: 29, borderRadius: 6, background: "#e6ecf2", display: "grid", placeItems: "center", color: "#078c80", flex: "none" }}>{menu === "Job" ? <BriefcaseBusiness size={14} /> : <Target size={14} />}</span><span style={{ gap: 1 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{item.title}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{item.contract} • {item.organization}</small></span></button>;
             })}
             {filteredItems.length === 0 && !isEmptyDueToRelation && query.trim() !== "" && (menu === "Candidate" || menu === "Contact" || menu === "Organization") && (
