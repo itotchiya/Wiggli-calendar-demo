@@ -26,6 +26,7 @@ export async function PATCH(
     start?: string;
     end?: string;
     timezone?: string;
+    description?: string;
     note?: string;
   } | null;
   if (!body?.start || !body?.end) {
@@ -53,6 +54,8 @@ export async function PATCH(
   }
 
   try {
+    const finalDescription = body.description !== undefined ? body.description : event.description;
+
     await withFreshGoogleClient(session.accessToken!, event.organizerEmail, async (client) => {
       const accessToken = client.credentials.access_token ?? session.accessToken!;
       const authClient = new google.auth.OAuth2();
@@ -73,11 +76,10 @@ export async function PATCH(
           ...remote.data,
           start: { dateTime: startUtc.toISOString(), timeZone: timezone },
           end: { dateTime: endUtc.toISOString(), timeZone: timezone },
-          // The note rides in the description so it appears in every native
-          // invitation and calendar card ("updated because …").
+          // The note rides in the description for native email delivery.
           description: body.note?.trim()
-            ? [remote.data.description?.replace(/— Updated:[\s\S]*$/, "").trim(), `— Updated: ${body.note.trim()}`].filter(Boolean).join("\n\n")
-            : remote.data.description,
+            ? [finalDescription?.replace(/— Update Reason:[\s\S]*$/, "").replace(/— Updated:[\s\S]*$/, "").trim(), `— Update Reason: ${body.note.trim()}`].filter(Boolean).join("\n\n")
+            : finalDescription,
         },
       });
     });
@@ -89,6 +91,7 @@ export async function PATCH(
           start: startUtc,
           end: endUtc,
           timezone,
+          description: finalDescription,
           rescheduledAt: new Date(),
           rescheduleNote: body.note?.trim() || null,
           status: "SCHEDULED",

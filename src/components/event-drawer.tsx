@@ -385,7 +385,7 @@ function AttendeeChip({ name, type, avatar, organizer = false, onRemove }: { nam
   );
 }
 
-function AttendeePicker({ selected, onSelect, onRemove }: { selected: AttendeePerson[]; onSelect: (person: AttendeePerson) => void; onRemove: (id: string) => void }) {
+function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { selected: AttendeePerson[]; onSelect: (person: AttendeePerson) => void; onRemove: (id: string) => void; disabled?: boolean }) {
   const [menu, setMenu] = useState<"types" | AttendeeType | null>(null);
   const [query, setQuery] = useState("");
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -402,7 +402,7 @@ function AttendeePicker({ selected, onSelect, onRemove }: { selected: AttendeePe
   }, []);
 
   const chooseType = (type: AttendeeType) => {
-    if (atLimit) return;
+    if (atLimit || disabled) return;
     setQuery("");
     setMenu(type);
   };
@@ -411,8 +411,10 @@ function AttendeePicker({ selected, onSelect, onRemove }: { selected: AttendeePe
     <div className="attendee-picker" ref={pickerRef}>
       <div className="attendee-chips">
         <AttendeeChip name="Kai Zeller" type="Organizer" organizer />
-        {selected.map((person) => <AttendeeChip name={person.name} type={attendeeTypeLabels[person.type]} avatar={person.avatar} onRemove={person.locked ? undefined : () => onRemove(person.id)} key={person.id} />)}
-        <button className="add-attendee-button" type="button" disabled={atLimit} aria-label={atLimit ? "Maximum of 10 attendees reached" : "Add attendee"} aria-expanded={menu !== null} title={atLimit ? "Maximum of 10 attendees reached" : undefined} onClick={() => setMenu((current) => current ? null : "types")}><Plus size={21} /></button>
+        {selected.map((person) => <AttendeeChip name={person.name} type={attendeeTypeLabels[person.type]} avatar={person.avatar} onRemove={disabled || person.locked ? undefined : () => onRemove(person.id)} key={person.id} />)}
+        {!disabled && (
+          <button className="add-attendee-button" type="button" disabled={atLimit} aria-label={atLimit ? "Maximum of 10 attendees reached" : "Add attendee"} aria-expanded={menu !== null} title={atLimit ? "Maximum of 10 attendees reached" : undefined} onClick={() => setMenu((current) => current ? null : "types")}><Plus size={21} /></button>
+        )}
       </div>
 
       {menu === "types" && (
@@ -615,7 +617,7 @@ type RelatedToType = "Candidate" | "Job" | "Opportunity" | "Organization" | "Con
 
 type LinkedRecord = { type: RelatedToType; item: any };
 
-function LinkedToSection({ records, onAdd, onRemove }: { records: LinkedRecord[]; onAdd: (type: RelatedToType, item: any) => void; onRemove: (type: RelatedToType) => void }) {
+function LinkedToSection({ records, onAdd, onRemove, disabled = false }: { records: LinkedRecord[]; onAdd: (type: RelatedToType, item: any) => void; onRemove: (type: RelatedToType) => void; disabled?: boolean }) {
   const [menu, setMenu] = useState<"types" | RelatedToType | null>(null);
   const [query, setQuery] = useState("");
   const [showAllJobs, setShowAllJobs] = useState(false);
@@ -634,52 +636,10 @@ function LinkedToSection({ records, onAdd, onRemove }: { records: LinkedRecord[]
     if (type === "Opportunity") return Object.values(linkedContexts).filter((c) => c.kind === "opportunity");
     return [];
   };
-  const getAllowedIds = (target: RelatedToType): Set<string> | null => {
-    if (!anchor) return null; // first pick always all linked, no filter
-    const aType = anchor.type;
-    const aItem = anchor.item;
-    // Candidate anchor
-    if (aType === "Candidate") {
-      if (target === "Job" || target === "Opportunity") {
-        const links = (candidateLinks[aItem.id] ?? []) as LinkedContext[];
-        const filtered = links.filter((l) => (target === "Job" ? l.kind === "job" : l.kind === "opportunity"));
-        return new Set(filtered.map((l) => l.id));
-      }
-      return null;
-    }
-    // Contact anchor - jobs/opps/contacts always linked to org, show all if no mapping
-    if (aType === "Contact") {
-      if (target === "Organization") {
-        const ids = (contactOrganizations[aItem.id] ?? []) as string[];
-        return ids.length ? new Set(ids) : null;
-      }
-      if (target === "Job" || target === "Opportunity") {
-        const orgIds = (contactOrganizations[aItem.id] ?? []) as string[];
-        if (!orgIds.length) return null;
-        return new Set(Object.values(linkedContexts).filter((c) => orgIds.includes(c.organizationId) && (target === "Job" ? c.kind === "job" : c.kind === "opportunity")).map((c) => c.id));
-      }
-      return null;
-    }
-    // Organization anchor - fallback to all if no direct links
-    if (aType === "Organization") {
-      if (target === "Job" || target === "Opportunity") {
-        const ids = new Set(Object.values(linkedContexts).filter((c) => c.organizationId === aItem.id && (target === "Job" ? c.kind === "job" : c.kind === "opportunity")).map((c) => c.id));
-        return ids.size ? ids : null;
-      }
-      return null;
-    }
-    // Job/Opportunity anchor -> Organization - always linked, fallback to all orgs
-    if ((aType === "Job" || aType === "Opportunity") && target === "Organization") {
-      const orgId = (linkedContexts as any)[aItem.id]?.organizationId ?? aItem.organizationId ?? aItem.id;
-      // if mapping missing (e.g. synthetic job id 1628 / 10000073), show all instead of empty
-      const mapped = orgId ? new Set([orgId]) : new Set<string>();
-      if (mapped.size === 0) return null;
-      // verify org exists, otherwise show all
-      const exists = (Object.keys(organizations) as string[]).some((k) => mapped.has(k));
-      return exists ? mapped : null;
-    }
-    return null;
-  };
+  // Free linking: the organizer can link ANY record to the event — no anchor
+  // relation filtering, no "not linked to any X" empty states. A candidate can
+  // be linked alongside a contact and a job even when they share no relation.
+  const getAllowedIds = (_target: RelatedToType): Set<string> | null => null;
   const allowedIds = menu && menu !== "types" ? getAllowedIds(menu as RelatedToType) : null;
   // when user clicks Add to a job / Browse opportunities, bypass filter to show all
   const effectiveAllowed = (showAllJobs && menu === "Job" && anchor?.type === "Candidate") || (showAllOpps && menu === "Opportunity" && anchor?.type === "Candidate") ? null : allowedIds;
@@ -802,14 +762,16 @@ function LinkedToSection({ records, onAdd, onRemove }: { records: LinkedRecord[]
                   >
                     <ExternalLink size={16} />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(record.type)}
-                    aria-label={`Remove ${record.type}`}
-                    style={{ width: 28, height: 28, display: "grid", placeItems: "center", borderRadius: 6, background: "transparent", color: "#94a3b8", cursor: "pointer" }}
-                  >
-                    <X size={15} />
-                  </button>
+                  {!disabled && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(record.type)}
+                      aria-label={`Remove ${record.type}`}
+                      style={{ width: 28, height: 28, display: "grid", placeItems: "center", borderRadius: 6, background: "transparent", color: "#94a3b8", cursor: "pointer" }}
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
                 </span>
               </div>
             );
@@ -817,9 +779,11 @@ function LinkedToSection({ records, onAdd, onRemove }: { records: LinkedRecord[]
         </div>
       )}
 
-      <button className="outline-action" type="button" aria-expanded={menu !== null} onClick={() => setMenu((c) => (c ? null : "types"))}>
-        <Link2 size={15} /> Link a record
-      </button>
+      {!disabled && (
+        <button className="outline-action" type="button" aria-expanded={menu !== null} onClick={() => setMenu((c) => (c ? null : "types"))}>
+          <Link2 size={15} /> Link a record
+        </button>
+      )}
 
       {menu === "types" && (
         <div className="attendee-type-menu" role="menu" aria-label="Linked to type" style={{ left: 0, width: 260 }}>
@@ -939,7 +903,7 @@ type LocationSnapshot = {
   meetLink?: string | null;
 };
 
-function EventLocation({ open, required, onOpen, onRemove, showError = false, onValidityChange, initialLocation, onLocationChange }: { open: boolean; required: boolean; onOpen: () => void; onRemove: () => void; showError?: boolean; onValidityChange?: (valid: boolean) => void; initialLocation?: LocationSnapshot | null; onLocationChange?: (data: LocationSnapshot) => void }) {
+function EventLocation({ open, required, onOpen, onRemove, showError = false, onValidityChange, initialLocation, onLocationChange, disabled = false }: { open: boolean; required: boolean; onOpen: () => void; onRemove: () => void; showError?: boolean; onValidityChange?: (valid: boolean) => void; initialLocation?: LocationSnapshot | null; onLocationChange?: (data: LocationSnapshot) => void; disabled?: boolean }) {
   const [locationType, setLocationType] = useState<"company" | "custom" | "online">(() => (initialLocation?.type as "company" | "custom" | "online") ?? "company");
   const [locationMenuOpen, setLocationMenuOpen] = useState(false);
   const [officeMenuOpen, setOfficeMenuOpen] = useState(false);
@@ -1086,12 +1050,12 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
     <section className="event-location-section" ref={locationRef}>
       <div className="field-label field-space location-heading">
         <span>Location{(required || open) && <span className="required-star">*</span>}</span>
-        {open && !required ? <button type="button" onClick={onRemove} aria-label="Remove location"><X size={15} /></button> : <span style={{ width: 24, height: 24 }} aria-hidden="true" />}
+        {open && !required && !disabled ? <button type="button" onClick={onRemove} aria-label="Remove location"><X size={15} /></button> : <span style={{ width: 24, height: 24 }} aria-hidden="true" />}
       </div>
-      {!open ? <button className="outline-action" type="button" onClick={onOpen}><Plus size={15} /> Select location</button> : (
+      {!open ? (disabled ? null : <button className="outline-action" type="button" onClick={onOpen}><Plus size={15} /> Select location</button>) : (
         <div className="location-card">
           <div className="location-dropdown-wrap">
-            <button className="location-select" type="button" aria-expanded={locationMenuOpen} onClick={() => { setLocationMenuOpen((value) => !value); setOfficeMenuOpen(false); setProviderMenuOpen(false); }} style={{ fontSize: 13, height: 39 }}><span style={{ fontSize: 13 }}><ActiveLocationIcon size={16} /> {activeLocation.label}</span><ChevronDown size={15} /></button>
+            <button className="location-select" type="button" disabled={disabled} aria-expanded={locationMenuOpen} onClick={() => { if (disabled) return; setLocationMenuOpen((value) => !value); setOfficeMenuOpen(false); setProviderMenuOpen(false); }} style={{ fontSize: 13, height: 39, ...(disabled ? { background: "#f8fafc", color: "#475569", cursor: "not-allowed" } : {}) }}><span style={{ fontSize: 13 }}><ActiveLocationIcon size={16} /> {activeLocation.label}</span><ChevronDown size={15} /></button>
             {locationMenuOpen && <div className="location-options" role="menu" aria-label="Location type">{locationOptions.map((item) => { const Icon = item.icon; return <button type="button" role="menuitem" onClick={() => { setLocationType(item.id); setLocationMenuOpen(false); setOfficeMenuOpen(false); setProviderMenuOpen(false); }} key={item.id} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><Icon size={16} />{item.label}</span>{locationType === item.id && <Check size={15} />}</button>; })}</div>}
           </div>
 
@@ -1237,7 +1201,61 @@ type EventMeta = {
   linkedRecords?: LinkedRecord[];
 };
 
-export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, initialContact, editingEvent, rescheduleDate, fixedEventType, fixedContext, initialLinkedRecords, mode = "smart" }: { open: boolean; onClose: () => void; slot: { date: string; hour: number; minute: number }; onCreate: (title: string, occurrences: TimedDate[], meta?: EventMeta) => void; initialCandidate?: DrawerCandidate; initialContact?: DrawerContact; editingEvent?: { id: number; title: string; date: string; endDate?: string; hour: number; minute: number; endHour: number; endMinute: number; eventType?: string; description?: string; storedAttendees?: { id: string; name: string; email: string; type: string; avatar: string; links?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string }[]; organizations?: string[]; schedules?: { status: string; date: string; time?: string }[]; locked?: boolean }[]; storedOrganization?: { id: string; name: string; initials: string; relationship: string } | null; storedContext?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string } | null; storedLocation?: LocationSnapshot | null } | null; rescheduleDate?: string | null; fixedEventType?: string; fixedContext?: LinkedContext; allowedEventTypes?: string[]; initialLinkedRecords?: LinkedRecord[]; mode?: "smart" | "resend-rsvp" | "native" }) {
+export function EventDrawer({
+  open,
+  onClose,
+  slot,
+  onCreate,
+  initialCandidate,
+  initialContact,
+  editingEvent,
+  rescheduleDate,
+  onRescheduleComplete,
+  fixedEventType,
+  fixedContext,
+  initialLinkedRecords,
+  mode = "smart",
+}: {
+  open: boolean;
+  onClose: () => void;
+  slot: { date: string; hour: number; minute: number };
+  onCreate: (title: string, occurrences: TimedDate[], meta?: EventMeta) => void;
+  initialCandidate?: DrawerCandidate;
+  initialContact?: DrawerContact;
+  editingEvent?: {
+    id: string | number;
+    title: string;
+    date: string;
+    endDate?: string;
+    hour: number;
+    minute: number;
+    endHour: number;
+    endMinute: number;
+    eventType?: string;
+    description?: string;
+    storedAttendees?: {
+      id: string;
+      name: string;
+      email: string;
+      type: string;
+      avatar: string;
+      links?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string }[];
+      organizations?: string[];
+      schedules?: { status: string; date: string; time?: string }[];
+      locked?: boolean;
+    }[];
+    storedOrganization?: { id: string; name: string; initials: string; relationship: string } | null;
+    storedContext?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string } | null;
+    storedLocation?: LocationSnapshot | null;
+  } | null;
+  rescheduleDate?: string | null;
+  onRescheduleComplete?: () => void;
+  fixedEventType?: string;
+  fixedContext?: LinkedContext;
+  allowedEventTypes?: string[];
+  initialLinkedRecords?: LinkedRecord[];
+  mode?: "smart" | "resend-rsvp" | "native";
+}) {
   const { data: session } = useSession();
   const nativeMode = mode === "native";
   const resendRsvpMode = mode === "resend-rsvp";
@@ -1245,6 +1263,7 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
   const configuredEventTypeNames = useMemo(() => configuredEventTypes.map((type) => type.name), [configuredEventTypes]);
   const [drawerStep, setDrawerStep] = useState<1 | 2>(1);
   const [title, setTitle] = useState("");
+  const [rescheduleNote, setRescheduleNote] = useState("");
   const [reminder, setReminder] = useState(true);
   const [reminderValue, setReminderValue] = useState("15");
   const [reminderUnit, setReminderUnit] = useState<ReminderUnit>("minutes");
@@ -1789,6 +1808,9 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
       setTitle("");
       setDescription("");
       setError(false);
+    } else if (rescheduleDate && editingEvent) {
+      // Reschedule mode: go to Step 2 to add update note before dispatching.
+      setDrawerStep(2);
     } else {
       // Build one canonical document, then draft the fixed invitation around
       // one AI-owned context paragraph per attendee audience.
@@ -1807,6 +1829,36 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
     setTitle("");
     setDescription("");
     setError(false);
+  };
+
+  /** Called from Step 2 in reschedule mode: calls the reschedule API with new date/time + note. */
+  const handleReschedule = async () => {
+    if (!editingEvent) return;
+    const occ = getOccurrences()[0];
+    if (!occ) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/events/${editingEvent.id}/reschedule`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          start: `${occ.date}T${occ.start}:00`,
+          end: `${occ.date}T${occ.end}:00`,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
+          description: description || undefined,
+          note: rescheduleNote.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      showToast(`${title} rescheduled — all attendees notified`);
+      onRescheduleComplete?.();
+      onClose();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Reschedule failed");
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSendInvitation = async () => {
@@ -1913,20 +1965,34 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
       >
         {drawerStep === 1 ? (
           <>
-            <div className="drawer-heading"><h2>{editingEvent ? "Edit event" : "New Event"}</h2><button onClick={onClose} aria-label="Close"><X size={17} /></button></div>
+            <div className="drawer-heading"><h2>{rescheduleDate && editingEvent ? `Reschedule — ${title}` : editingEvent ? "Edit event" : "New Event"}</h2><button onClick={onClose} aria-label="Close"><X size={17} /></button></div>
             <div className="drawer-body">
               <section className="drawer-form-column">
                 <label className="field-label"><span>Title<span className="required-star">*</span></span></label>
-                <input className="drawer-title-input" value={title} onChange={(event) => { setTitle(event.target.value); setError(false); }} placeholder="Add a title" />
+                <input
+                  className="drawer-title-input"
+                  value={title}
+                  onChange={(event) => { if (rescheduleDate && editingEvent) return; setTitle(event.target.value); setError(false); }}
+                  readOnly={!!(rescheduleDate && editingEvent)}
+                  placeholder="Add a title"
+                  style={(rescheduleDate && editingEvent) ? { background: "#f8fafc", color: "#475569", cursor: "not-allowed" } : undefined}
+                />
                 {error && <p className="field-error"><FieldErrorIcon /> Event title is required</p>}
 
                  <div className="field-label field-space event-type-label-row"><span className="event-type-label-copy">Event type<span className="required-star">*</span></span></div>
                 <div ref={eventTypeRef} className="event-type-dropdown-wrap" style={{ position: "relative" }}>
-                  <button className="location-select" type="button" aria-expanded={eventTypeMenuOpen} onClick={() => setEventTypeMenuOpen((v) => !v)} style={{ width: "100%", fontSize: 13, height: 39 }}>
+                  <button
+                    className="location-select"
+                    type="button"
+                    disabled={!!(rescheduleDate && editingEvent)}
+                    aria-expanded={!!(rescheduleDate && editingEvent) ? false : eventTypeMenuOpen}
+                    onClick={() => { if (rescheduleDate && editingEvent) return; setEventTypeMenuOpen((v) => !v); }}
+                    style={{ width: "100%", fontSize: 13, height: 39, ...((rescheduleDate && editingEvent) ? { background: "#f8fafc", color: "#475569", cursor: "not-allowed" } : {}) }}
+                  >
                     <span style={{ fontSize: 13 }}>{eventType}</span>
                     <ChevronDown size={15} />
                   </button>
-                  {eventTypeMenuOpen && (
+                  {eventTypeMenuOpen && !(rescheduleDate && editingEvent) && (
                     <div className="location-options event-type-options" role="menu" aria-label="Event type" style={{ width: "100%" }}>
                       {configuredEventTypeNames.map((opt) => {
                         return (
@@ -1956,10 +2022,10 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
                  <MultipleDatePicker
                    key={open ? `date-time-${slot.date}-${slot.hour}-${slot.minute}` : "date-time-closed"}
                    value={occurrences}
-                   minDate={todayKey}
+                   minDate={rescheduleDate && editingEvent ? "2020-01-01" : todayKey}
                    onChange={setOccurrences}
                  />
-                 {occurrences.length > 1 && (
+                 {occurrences.length > 1 && !(rescheduleDate && editingEvent) && (
                    <div className="date-time-support" aria-live="polite">
                      <strong>{occurrences.length} time slots</strong> will be sent as separate invitations so attendees can choose the time that works best.
                    </div>
@@ -1969,21 +2035,41 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
 
                 <section className="related-to-section">
                   <div className="field-label field-space location-heading"><span>Linked to</span></div>
-                  <LinkedToSection records={linkedRecords} onAdd={(type, item) => setLinkedRecords((prev) => prev.some((r) => r.type === type) ? prev : [...prev, { type, item }])} onRemove={(type) => setLinkedRecords((prev) => prev.filter((r) => r.type !== type))} />
+                  <LinkedToSection
+                    records={linkedRecords}
+                    onAdd={(type, item) => setLinkedRecords((prev) => prev.some((r) => r.type === type) ? prev : [...prev, { type, item }])}
+                    onRemove={(type) => setLinkedRecords((prev) => prev.filter((r) => r.type !== type))}
+                    disabled={!!(rescheduleDate && editingEvent)}
+                  />
                 </section>
 
                 <label className="field-label field-space attendee-field-label"><span>Attendees<span className="required-star">*</span></span><span className="attendee-count" aria-live="polite">{selectedAttendees.length} / {MAX_ATTENDEES}</span></label>
-                <AttendeePicker key={open ? `attendees-${slot.date}-${slot.hour}-${slot.minute}` : "attendees-closed"} selected={selectedAttendees} onRemove={removeAttendee} onSelect={selectAttendee} />
-                {nativeMode && selectedAttendees.length > 0 && (
+                <AttendeePicker key={open ? `attendees-${slot.date}-${slot.hour}-${slot.minute}` : "attendees-closed"} selected={selectedAttendees} onRemove={removeAttendee} onSelect={selectAttendee} disabled={!!(rescheduleDate && editingEvent)} />
+                {rescheduleDate && editingEvent && (
+                  <p className="helper" style={{ marginTop: 6 }}><Lock size={13} /> Attendee list cannot be changed during reschedule.</p>
+                )}
+                {nativeMode && selectedAttendees.length > 0 && !(rescheduleDate && editingEvent) && (
                   <p className="helper" style={{ marginTop: 6 }}><Info size={14} /> Google will email each attendee its standard calendar invitation — no custom email in this mode.</p>
                 )}
 
-                <EventLocation open={locationOpen} required={selectedAttendees.length > 0} onOpen={() => setLocationOpen(true)} onRemove={() => setLocationOpen(false)} showError={locationError} onValidityChange={(valid) => { setLocationValid(valid); if (valid) setLocationError(false); }} initialLocation={editingEvent?.storedLocation ?? null} onLocationChange={setLocationSnapshot} />
+                <EventLocation
+                  open={locationOpen}
+                  required={selectedAttendees.length > 0}
+                  onOpen={() => setLocationOpen(true)}
+                  onRemove={() => setLocationOpen(false)}
+                  showError={locationError}
+                  onValidityChange={(valid) => { setLocationValid(valid); if (valid) setLocationError(false); }}
+                  initialLocation={editingEvent?.storedLocation ?? null}
+                  onLocationChange={setLocationSnapshot}
+                  disabled={!!(rescheduleDate && editingEvent)}
+                />
 
-                <div className="reminder-block field-space" ref={reminderRef}>
-                  <div className="reminder-title"><label className="field-label">Reminder</label><Toggle on={reminder} onClick={() => { setReminder((value) => !value); setReminderMenuOpen(false); }} label="Reminder" /></div>
-                  {reminder && <><div className="reminder-controls"><input type="number" min="0" max={reminderLimits[reminderUnit].max} value={reminderValue} onChange={(event) => setReminderValue(event.target.value)} onBlur={() => { if (!reminderValue) setReminderValue(reminderDefaults[reminderUnit]); }} aria-label="Reminder value" /><div className="reminder-unit-wrap"><button className="select-like reminder-unit-select" type="button" aria-expanded={reminderMenuOpen} onClick={() => setReminderMenuOpen((value) => !value)}><span>{reminderUnit}</span><ChevronDown size={13} /></button>{reminderMenuOpen && <div className="reminder-unit-options" role="menu" aria-label="Reminder unit">{(["minutes", "hours", "days", "weeks"] as ReminderUnit[]).map((unit) => <button type="button" role="menuitem" onClick={() => { setReminderUnit(unit); setReminderValue(reminderDefaults[unit]); setReminderMenuOpen(false); }} key={unit}><span>{unit}</span>{reminderUnit === unit && <Check size={14} />}</button>)}</div>}</div></div><p className="helper"><Info size={14} /> {reminderLimits[reminderUnit].copy}</p></>}
-                </div>
+                {!(rescheduleDate && editingEvent) && (
+                  <div className="reminder-block field-space" ref={reminderRef}>
+                    <div className="reminder-title"><label className="field-label">Reminder</label><Toggle on={reminder} onClick={() => { setReminder((value) => !value); setReminderMenuOpen(false); }} label="Reminder" /></div>
+                    {reminder && <><div className="reminder-controls"><input type="number" min="0" max={reminderLimits[reminderUnit].max} value={reminderValue} onChange={(event) => setReminderValue(event.target.value)} onBlur={() => { if (!reminderValue) setReminderValue(reminderDefaults[reminderUnit]); }} aria-label="Reminder value" /><div className="reminder-unit-wrap"><button className="select-like reminder-unit-select" type="button" aria-expanded={reminderMenuOpen} onClick={() => setReminderMenuOpen((value) => !value)}><span>{reminderUnit}</span><ChevronDown size={13} /></button>{reminderMenuOpen && <div className="reminder-unit-options" role="menu" aria-label="Reminder unit">{(["minutes", "hours", "days", "weeks"] as ReminderUnit[]).map((unit) => <button type="button" role="menuitem" onClick={() => { setReminderUnit(unit); setReminderValue(reminderDefaults[unit]); setReminderMenuOpen(false); }} key={unit}><span>{unit}</span>{reminderUnit === unit && <Check size={14} />}</button>)}</div>}</div></div><p className="helper"><Info size={14} /> {reminderLimits[reminderUnit].copy}</p></>}
+                  </div>
+                )}
 
                 <label className="field-label field-space">Description</label>
                 <div className="description-field"><textarea value={description} onChange={(event) => setDescription(event.target.value.slice(0, 2000))} placeholder="Description here" /></div>
@@ -1991,7 +2077,77 @@ export function EventDrawer({ open, onClose, slot, onCreate, initialCandidate, i
               </section>
               <DrawerInfoPanel talent={selectedTalent} internalAttendees={selectedInternals} />
             </div>
-            <div className="drawer-footer"><button className="text-button" onClick={onClose}>Cancel</button><div>{nativeMode ? <button className="create-event-button" disabled={sending} onClick={submit}>{sending ? "Creating…" : <>Create event & invite <ArrowRight size={18} strokeWidth={1.9} /></>}</button> : rescheduleDate ? <><button className="save-logged-button" type="button" onClick={submit}>Preview</button><button className="create-event-button" onClick={submit}>Reschedule <ArrowRight size={18} strokeWidth={1.9} /></button></> : <><button className="save-logged-button" type="button" onClick={saveAsLogged}>Save as Logged</button><button className={`create-event-button ${shouldPreviewInvitation ? "" : "hug-content"}`} onClick={submit}>{shouldPreviewInvitation ? <>Preview invitation <ArrowRight size={18} strokeWidth={1.9} /></> : "Create event"}</button></>}</div></div>
+            <div className="drawer-footer">
+              <button className="text-button" onClick={onClose}>Cancel</button>
+              <div>
+                {rescheduleDate && editingEvent ? (
+                  <button className="create-event-button" onClick={submit}>
+                    Reschedule <ArrowRight size={18} strokeWidth={1.9} />
+                  </button>
+                ) : nativeMode ? (
+                  <button className="create-event-button" disabled={sending} onClick={submit}>{sending ? "Creating…" : <>Create event &amp; invite <ArrowRight size={18} strokeWidth={1.9} /></>}</button>
+                ) : (
+                  <>
+                    <button className="save-logged-button" type="button" onClick={saveAsLogged}>Save as Logged</button>
+                    <button className={`create-event-button ${shouldPreviewInvitation ? "" : "hug-content"}`} onClick={submit}>{shouldPreviewInvitation ? <>Preview invitation <ArrowRight size={18} strokeWidth={1.9} /></> : "Create event"}</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        ) : rescheduleDate && editingEvent ? (
+          /* Step 2 – Reschedule: add an optional update note and confirm */
+          <>
+            <div className="drawer-heading">
+              <div className="drawer-heading-left">
+                <button className="drawer-back-btn" onClick={() => setDrawerStep(1)} aria-label="Back"><ChevronLeft size={18} /></button>
+                <h2>Review &amp; notify attendees</h2>
+              </div>
+              <button onClick={onClose} aria-label="Close"><X size={17} /></button>
+            </div>
+            <div className="drawer-body review-invite-body" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Schedule summary */}
+              <div style={{ background: "#f0f9f6", border: "1px solid #c6e9de", borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "#0f5132" }}>New schedule</p>
+                {(() => { const occ = getOccurrences()[0]; return occ ? <p style={{ margin: 0, fontSize: 13, color: "#1d5c3a" }}>{occ.date} · {occ.start} – {occ.end}</p> : null; })()}
+                {selectedAttendees.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                    {selectedAttendees.map((a) => (
+                      <span key={a.id} style={{ fontSize: 12, background: "#fff", border: "1px solid #b2dfcf", borderRadius: 20, padding: "2px 10px", color: "#1d5c3a" }}>{a.name}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Update note */}
+              <div>
+                <label className="field-label" style={{ marginBottom: 6 }}>Update note <span style={{ color: "#94a3b8", fontWeight: 400 }}>(optional)</span></label>
+                <p className="helper" style={{ marginBottom: 8 }}><Info size={13} /> This note will be included in the update notification sent to all attendees.</p>
+                <div className="description-field">
+                  <textarea
+                    value={rescheduleNote}
+                    onChange={(e) => setRescheduleNote(e.target.value.slice(0, 500))}
+                    placeholder="e.g. Rescheduled to accommodate everyone's availability…"
+                    rows={4}
+                  />
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                  <span style={{ color: rescheduleNote.length >= 500 ? "#e5484d" : "#8da0b9", fontSize: 11 }}>{rescheduleNote.length}/500</span>
+                </div>
+              </div>
+
+              {/* Google Calendar delivery notice */}
+              <div style={{ background: "#f8f9fa", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 12, color: "#475569", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <Info size={14} style={{ marginTop: 1, flexShrink: 0, color: "#3b82f6" }} />
+                <span>Google Calendar will email an updated invitation to all attendees via <strong>sendUpdates: &quot;all&quot;</strong>.</span>
+              </div>
+            </div>
+            <div className="drawer-footer">
+              <button className="text-button" onClick={() => setDrawerStep(1)}><ChevronLeft size={16} /> Back</button>
+              <button className="send-invitation-button" type="button" disabled={sending} onClick={() => void handleReschedule()}>
+                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {sending ? "Updating…" : "Update & notify"}
+              </button>
+            </div>
           </>
         ) : (
           /* Step 2: Review Invitation */

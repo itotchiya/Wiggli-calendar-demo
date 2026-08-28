@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/chrome";
 import { CreatorDialog, type CreatorMode } from "@/components/creator-dialog";
-import { RescheduleDrawer } from "@/components/reschedule-drawer";
 import { EventDrawer } from "@/components/event-drawer";
 import { EventPreviewDialog } from "@/components/event-preview";
 import type { CalendarEventItem, PreviewStatus } from "@/lib/calendar-types";
@@ -328,18 +327,47 @@ export default function CalendarPage() {
         <MainCalendar events={events} selectedDate={selectedDate} onSelectDate={setSelectedDate} onSlot={openCreator} onEventClick={setPreviewEvent} />
       </div>
       <CreatorDialog open={chooserOpen} onClose={() => setChooserOpen(false)} onSelect={chooseCreator} />
-      {rescheduleTarget && (
-        <RescheduleDrawer
-          event={rescheduleTarget.event}
-          proposed={rescheduleTarget.proposed}
-          onClose={() => setRescheduleTarget(null)}
-          onUpdated={() => {
-            setRescheduleTarget(null);
-            void loadEvents();
-            window.setTimeout(() => void loadEvents(), 1800);
-          }}
-        />
-      )}
+      {/* Reschedule drawer — reuses EventDrawer in reschedule mode */}
+      {rescheduleTarget && (() => {
+        const ev = rescheduleTarget.event;
+        const editingEvent = {
+          id: ev.id,
+          title: ev.title,
+          date: ev.date,
+          hour: ev.hour,
+          minute: ev.minute,
+          endHour: ev.endHour,
+          endMinute: ev.endMinute,
+          eventType: ev.eventType,
+          description: ev.description,
+          storedAttendees: ev.previewAttendees.map((a) => ({
+            id: a.id,
+            name: a.name,
+            email: a.email,
+            type: a.role === "Organizer" ? "internal" : "contact",
+            avatar: a.avatar,
+            locked: true,
+          })),
+          storedLocation: null,
+          storedOrganization: null,
+          storedContext: null,
+        };
+        return (
+          <EventDrawer
+            open={true}
+            onClose={() => setRescheduleTarget(null)}
+            slot={{ date: ev.date, hour: ev.hour, minute: ev.minute }}
+            editingEvent={editingEvent}
+            rescheduleDate={ev.date}
+            onRescheduleComplete={() => {
+              setRescheduleTarget(null);
+              void loadEvents();
+              window.setTimeout(() => void loadEvents(), 1800);
+            }}
+            onCreate={() => {}}
+          />
+        );
+      })()}
       <EventDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -357,15 +385,12 @@ export default function CalendarPage() {
         onRefresh={(event) => void syncEvent(event)}
         refreshing={syncing}
         onReschedule={(event) => {
-          const pending = event.proposals?.[0] ?? null;
-          // Close the preview dialog — the reschedule drawer replaces it.
           setPreviewEvent(null);
+          const pending = event.proposals?.[0] ?? null;
           setRescheduleTarget(pending ? { event, proposed: pending } : { event, proposed: null });
         }}
         onDeleted={() => {
           void loadEvents();
-          // Keep the dialog open showing the cancelled state, but refresh the
-          // underlying list a beat later to pick up the CANCELLED status.
           window.setTimeout(() => void loadEvents(), 600);
         }}
       />
