@@ -74,8 +74,10 @@ export default function EventsPage() {
       const res = await fetch("/api/sync", { method: "POST" });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      if (body.updatedAttendees > 0) {
-        toast.success(`${body.updatedAttendees} new response(s) synced from Google Calendar.`);
+      if (body.importedEvents > 0 || body.updatedAttendees > 0) {
+        const imported = body.importedEvents > 0 ? `${body.importedEvents} event(s) imported` : "";
+        const responses = body.updatedAttendees > 0 ? `${body.updatedAttendees} response(s) updated` : "";
+        toast.success([imported, responses].filter(Boolean).join(" · ") + " from Google Calendar.");
       } else {
         toast.info("Everything already up to date.");
       }
@@ -93,8 +95,7 @@ export default function EventsPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Events &amp; RSVPs</h1>
           <p className="text-sm text-muted-foreground">
-            RSVP responses from Gmail, Outlook or Apple Calendar — auto-synced every
-            15 seconds.
+            Google Calendar events and RSVP responses — auto-synced every 15 seconds.
           </p>
         </div>
         <Button onClick={syncAll} disabled={syncing || !session}>

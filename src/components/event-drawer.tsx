@@ -372,7 +372,11 @@ function AttendeeAvatar({ name, avatar, organizer = false, size = 32 }: { name: 
   const initials = name.split(" ").map((part) => part[0]).slice(0, 2).join("");
   const palette = ["#667eea", "#0f9b8e", "#c06c84", "#4f7c8d", "#8b6fc0", "#d97757"];
   const color = organizer ? "#f5a000" : palette[name.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0) % palette.length];
-  return <span className="attendee-avatar" style={{ background: color, width: size, height: size, fontSize: size <= 28 ? 9 : 10 }}>{avatar && !organizer ? <img src={avatar} alt="" /> : initials}</span>;
+  // Show the photo when it loads; fall back to initials if the image is
+  // missing or fails (a bare colored circle looks like "no avatar").
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = Boolean(avatar && !organizer && !imgFailed);
+  return <span className="attendee-avatar" style={{ background: color, width: size, height: size, fontSize: size <= 28 ? 9 : 10 }}>{showImage ? <img src={avatar} alt="" onError={() => setImgFailed(true)} /> : initials}</span>;
 }
 
 function AttendeeChip({ name, type, avatar, organizer = false, onRemove }: { name: string; type: string; avatar?: string; organizer?: boolean; onRemove?: () => void }) {
@@ -1149,7 +1153,8 @@ export function buildContactAttendee(contact: DrawerContact): AttendeePerson {
   };
 }
 
-type EventMeta = {
+export type EventMeta = {
+  status?: "DRAFT" | "LOGGED" | "SCHEDULED";
   description: string;
   attendees: { id: string; name: string; email: string; type: string; avatar: string; links?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string }[]; organizations?: string[]; schedules?: { status: string; date: string; time?: string }[]; locked?: boolean }[];
   reminderLabel: string;
@@ -1170,6 +1175,8 @@ export function EventDrawer({
   initialContact,
   editingEvent,
   rescheduleDate,
+  isEdit,
+  initialStep,
   onRescheduleComplete,
   fixedEventType,
   fixedContext,
@@ -1207,8 +1214,12 @@ export function EventDrawer({
     storedOrganization?: { id: string; name: string; initials: string; relationship: string } | null;
     storedContext?: { id: string; kind: string; title: string; contract: string; organizationId: string; organization: string; organizationInitials: string } | null;
     storedLocation?: LocationSnapshot | null;
+    storedReminder?: number | null;
   } | null;
   rescheduleDate?: string | null;
+  isEdit?: boolean;
+  /** Opens the drawer directly on the requested workflow step. */
+  initialStep?: 1 | 2;
   onRescheduleComplete?: () => void;
   fixedEventType?: string;
   fixedContext?: LinkedContext;
@@ -1279,6 +1290,7 @@ export function EventDrawer({
 
   const reminderRef = useRef<HTMLDivElement>(null);
   const eventTypeRef = useRef<HTMLDivElement>(null);
+  const invitationPreparedRef = useRef(false);
   const todayKey = dateKey(getTodayUtcPlusTwo());
   const startDate = occurrences[0]?.date ?? "";
   const selectedTalent = selectedAttendees.find((person) => person.type === "candidate" || person.type === "freelancer");
@@ -1286,7 +1298,8 @@ export function EventDrawer({
   const selectedInternals = selectedAttendees.filter((person) => person.type === "internal");
 
   const dateMissing = occurrences.length === 0 || occurrences.some((occurrence) => !occurrence.date || !occurrence.start || !occurrence.end);
-  const isRescheduleSameDate = Boolean(rescheduleDate && occurrences.some((occurrence) => occurrence.date === rescheduleDate));
+  const isEditMode = Boolean(isEdit && editingEvent);
+  const isRescheduleSameDate = Boolean(rescheduleDate && !isEditMode && occurrences.some((occurrence) => occurrence.date === rescheduleDate));
 
   useEffect(() => {
     if (fixedContext) {
@@ -1305,8 +1318,8 @@ export function EventDrawer({
   }, [dateMissing, isRescheduleSameDate]);
 
   useEffect(() => {
-    if (open && rescheduleDate && startDate === rescheduleDate) setDateError(true);
-  }, [open, rescheduleDate, startDate]);
+    if (open && rescheduleDate && startDate === rescheduleDate && !isEditMode) setDateError(true);
+  }, [open, rescheduleDate, startDate, isEditMode]);
 
   const availableInviteTabs = useMemo(() => {
     const tabs: { key: "candidate" | "contact" | "internal"; label: string }[] = [];
@@ -1343,10 +1356,10 @@ export function EventDrawer({
     weeks: { max: 4, copy: "The value must be between the range of 0 to 4 weeks." },
   };
   const reminderDefaults: Record<ReminderUnit, string> = { minutes: "15", hours: "2", days: "2", weeks: "1" };
+  const hasInvitees = selectedAttendees.length > 0;
 
   const selectAttendee = (person: AttendeePerson) => {
     setSelectedAttendees((current) => current.length >= MAX_ATTENDEES || current.some((attendee) => attendee.id === person.id) ? current : [...current, person]);
-    setLocationOpen(true);
   };
 
   const removeAttendee = (id: string) => {
@@ -1389,6 +1402,15 @@ export function EventDrawer({
       return changed ? next : current;
     });
   }, [linkedRecords]);
+
+  useEffect(() => {
+    if (hasInvitees) {
+      setLocationOpen(true);
+      return;
+    }
+    setLocationOpen(false);
+    setLocationError(false);
+  }, [hasInvitees]);
 
   useEffect(() => {
     if (editingEvent || fixedContext) return;
@@ -1446,7 +1468,8 @@ export function EventDrawer({
     const initialStart = formatCompactTime(slot.hour, slot.minute);
     const initialDate = slot.date || dateKey(getTodayUtcPlusTwo());
     const initialEnd = addMinutesToDateTime(initialDate, initialStart, 15);
-    setDrawerStep(1);
+    setDrawerStep(initialStep ?? 1);
+    invitationPreparedRef.current = false;
     setOccurrences([{ date: initialDate, start: initialStart, end: initialEnd.date === initialDate ? initialEnd.time : "23:45" }]);
     if (editingEvent) {
       const editAttendees = (editingEvent.storedAttendees ?? []).map((a) => {
@@ -1493,9 +1516,24 @@ export function EventDrawer({
       setDescription("");
       setLocationOpen(!!initialAttendees.length);
     }
-    setReminder(true);
-    setReminderValue("15");
-    setReminderUnit("minutes");
+    if (editingEvent) {
+      const storedMinutes = editingEvent.storedReminder;
+      if (storedMinutes != null) {
+        setReminder(true);
+        if (storedMinutes % 10080 === 0) { setReminderValue(String(storedMinutes / 10080)); setReminderUnit("weeks"); }
+        else if (storedMinutes % 1440 === 0) { setReminderValue(String(storedMinutes / 1440)); setReminderUnit("days"); }
+        else if (storedMinutes % 60 === 0) { setReminderValue(String(storedMinutes / 60)); setReminderUnit("hours"); }
+        else { setReminderValue(String(storedMinutes)); setReminderUnit("minutes"); }
+      } else {
+        setReminder(false);
+        setReminderValue("15");
+        setReminderUnit("minutes");
+      }
+    } else {
+      setReminder(true);
+      setReminderValue("15");
+      setReminderUnit("minutes");
+    }
     setReminderMenuOpen(false);
     setEventType([fixedEventType, editingEvent?.eventType].find((value): value is string => Boolean(value && configuredEventTypeNames.includes(value))) ?? configuredEventTypeNames[0] ?? "Meeting");
     setEventTypeError(false);
@@ -1506,14 +1544,14 @@ export function EventDrawer({
     setOrgError(false);
     setContextError(false);
     setLocationError(false);
-    setDateError(Boolean(rescheduleDate && editingEvent && editingEvent.date === rescheduleDate));
+    setDateError(Boolean(rescheduleDate && editingEvent && !isEditMode && editingEvent.date === rescheduleDate));
     setSidePanel(null);
     setEmailSubjects(defaultEmailSubjects);
     setEmailBodies(defaultEmailBodies);
     setSmartDocument(null);
     setDraftedOnce(false);
     setAiError(null);
-  }, [open, slot.date, slot.hour, slot.minute, initialCandidate, initialContact, editingEvent, rescheduleDate, fixedEventType, configuredEventTypeNames, initialLinkedRecords]);
+  }, [open, slot.date, slot.hour, slot.minute, initialCandidate, initialContact, editingEvent, rescheduleDate, initialStep, fixedEventType, configuredEventTypeNames, initialLinkedRecords]);
 
   const getOccurrences = (): TimedDate[] =>
     [...occurrences].sort((a, b) => dateTimeStamp(a.date, a.start) - dateTimeStamp(b.date, b.start));
@@ -1521,7 +1559,7 @@ export function EventDrawer({
    const validateEvent = () => {
     const problems = { title: !title.trim(), date: dateMissing || isRescheduleSameDate, organization: false, context: false, location: false, eventType: false, linkedTo: false };
     problems.eventType = !eventType.trim();
-    problems.location = locationOpen && !locationValid;
+    problems.location = hasInvitees && (!locationOpen || !locationValid);
     setError(problems.title);
     setDateError(problems.date);
     setOrgError(problems.organization);
@@ -1570,6 +1608,7 @@ export function EventDrawer({
         type: record.type,
         id: String(record.item?.id ?? record.item?.reference ?? `${record.type}-${label}`),
         label,
+        avatar: typeof record.item?.avatar === "string" ? record.item.avatar : undefined,
         variable: LINKED_VARIABLE_BY_TYPE[record.type],
       }];
     });
@@ -1582,6 +1621,7 @@ export function EventDrawer({
       type: attendee.type,
       fullName: attendee.name,
       email: attendee.email,
+      avatar: attendee.avatar,
     }));
     const provider = locationSnapshot?.provider;
     const location: SmartEventDocument["event"]["location"] = !locationOpen || !locationSnapshot
@@ -1647,6 +1687,7 @@ export function EventDrawer({
       organizer: {
         fullName: session?.user?.name?.trim() || email.split("@")[0],
         email,
+        avatar: session?.user?.image ?? undefined,
         phone: "BE +32456555992",
       },
       linkedTo: records,
@@ -1708,6 +1749,23 @@ export function EventDrawer({
     }
   };
 
+  // Draft events opened from the preview already have all Step 1 details. Once
+  // the drawer has hydrated those details, prepare the invitation review copy
+  // so the user can immediately inspect it before sending.
+  useEffect(() => {
+    if (!open || drawerStep !== 2 || initialStep !== 2 || !editingEvent || rescheduleDate || invitationPreparedRef.current) return;
+    invitationPreparedRef.current = true;
+    const timer = window.setTimeout(() => {
+      const document = buildSmartDocument();
+      setSmartDocument(document);
+      void generateDrafts(undefined, document, true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // State hydration intentionally happens in the open/reset effect above;
+    // this callback runs on the following render with the hydrated values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, drawerStep, initialStep, editingEvent, rescheduleDate]);
+
   const submit = () => {
     if (!validateEvent()) return;
 
@@ -1742,7 +1800,10 @@ export function EventDrawer({
                slots: getOccurrences().map((item) => ({ date: item.date, start: item.start, end: item.end })),
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
               eventType,
-              attendees: selectedAttendees.map((r) => ({ email: r.email, name: r.name, type: r.type })),
+              attendees: selectedAttendees.map((r) => ({ email: r.email, name: r.name, type: r.type, avatar: r.avatar })),
+              organizerAvatar: session?.user?.image ?? undefined,
+              linkedRecords: linkedRecords.map((record) => ({ type: record.type, label: String(record.item?.name ?? record.item?.title ?? record.item?.organization ?? record.type), avatar: typeof record.item?.avatar === "string" ? record.item.avatar : undefined })),
+              locationType: locationSnapshot?.type,
             }),
           });
           const created = await res.json();
@@ -1763,7 +1824,57 @@ export function EventDrawer({
     }
 
     if (!shouldPreviewInvitation) {
-      onCreate(title.trim(), getOccurrences(), buildMeta());
+      // Organizer-only events still belong in Google Calendar, but have no
+      // invitees to notify. Use the native endpoint with an empty attendee list.
+      if (selectedAttendees.length === 0) {
+        void (async () => {
+          setSending(true);
+          try {
+            const occurrence = getOccurrences()[0];
+            if (!occurrence) throw new Error("Select at least one time slot.");
+            const location = locationSnapshot?.type === "online"
+              ? undefined
+              : locationSnapshot
+                ? locationSnapshot.custom.street || locationSnapshot.office || locationSnapshot.custom.query || ""
+                : undefined;
+            const res = await fetch("/api/native-events", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                title: title.trim() || "Event",
+                description,
+                location,
+                conference: locationSnapshot?.type === "online" && locationSnapshot?.provider === "google",
+                date: occurrence.date,
+                start: occurrence.start,
+                end: occurrence.end,
+                slots: getOccurrences().map((item) => ({ date: item.date, start: item.start, end: item.end })),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
+                eventType,
+                attendees: [],
+                organizerAvatar: session?.user?.image ?? undefined,
+                linkedRecords: linkedRecords.map((record) => ({ type: record.type, label: String(record.item?.name ?? record.item?.title ?? record.item?.organization ?? record.type), avatar: typeof record.item?.avatar === "string" ? record.item.avatar : undefined })),
+                locationType: locationSnapshot?.type,
+                reminderMinutes: reminder ? Math.max(0, Number(reminderValue) || 0) : null,
+              }),
+            });
+            const created = await res.json();
+            if (!res.ok) {
+              notifyIfGoogleSessionExpired(res, created);
+              throw new Error(created.error ?? `HTTP ${res.status}`);
+            }
+            onCreate(title.trim() || "Event", getOccurrences(), { ...buildMeta(), status: "SCHEDULED" });
+            showToast(`${title.trim() || "Event"} created in Google Calendar`);
+            onClose();
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : "Failed to create event");
+          } finally {
+            setSending(false);
+          }
+        })();
+        return;
+      }
+      onCreate(title.trim(), getOccurrences(), { ...buildMeta(), status: "SCHEDULED" });
       showToast(`${title.trim()} created successfully`);
       setTitle("");
       setDescription("");
@@ -1784,8 +1895,24 @@ export function EventDrawer({
 
   const saveAsLogged = () => {
     if (!validateEvent()) return;
-    onCreate(title.trim(), getOccurrences(), buildMeta());
+    onCreate(title.trim(), getOccurrences(), { ...buildMeta(), status: "LOGGED" });
     showToast(`${title.trim()} saved as logged`);
+    setTitle("");
+    setDescription("");
+    setError(false);
+  };
+
+  const saveAsDraft = () => {
+    if (!title.trim()) {
+      setError(true);
+      return;
+    }
+    if (dateMissing) {
+      setDateError(true);
+      return;
+    }
+    onCreate(title.trim(), getOccurrences(), { ...buildMeta(), status: "DRAFT" });
+    showToast(`${title.trim()} saved as draft`);
     setTitle("");
     setDescription("");
     setError(false);
@@ -1796,8 +1923,30 @@ export function EventDrawer({
     if (!editingEvent) return;
     const occ = getOccurrences()[0];
     if (!occ) return;
+    if (String(editingEvent.id).startsWith("draft-")) {
+      onCreate(title.trim() || "Event", getOccurrences(), { ...buildMeta(), status: "DRAFT" });
+      showToast(`${title.trim() || "Event"} rescheduled as draft`);
+      onRescheduleComplete?.();
+      onClose();
+      return;
+    }
     setSending(true);
     try {
+      const reminderMinutesForPayload = reminder
+        ? Math.max(0, Number(reminderValue) || 0) *
+          (reminderUnit === "minutes" ? 1 : reminderUnit === "hours" ? 60 : reminderUnit === "days" ? 1440 : 10080)
+        : null;
+      const locationValue = !locationOpen || !locationSnapshot
+        ? undefined
+        : locationSnapshot.type === "online"
+          ? (locationSnapshot.provider === "manual"
+              ? locationSnapshot.manualUrl ?? undefined
+              : locationSnapshot.provider === "google"
+                ? undefined
+                : (locationSnapshot.provider ? meetingProviders[locationSnapshot.provider]?.link ?? undefined : undefined))
+          : locationSnapshot.type === "company"
+            ? locationSnapshot.office || undefined
+            : ([locationSnapshot.custom.street, locationSnapshot.custom.number, locationSnapshot.custom.box, locationSnapshot.custom.zip, locationSnapshot.custom.city, locationSnapshot.custom.country].filter(Boolean).join(", ") || locationSnapshot.custom.query || undefined);
       const res = await fetch(`/api/events/${editingEvent.id}/reschedule`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -1807,11 +1956,20 @@ export function EventDrawer({
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
           description: description || undefined,
           note: rescheduleNote.trim() || undefined,
+          summary: title.trim() || undefined,
+          ...(locationValue !== undefined ? { location: locationValue } : {}),
+          attendees: selectedAttendees.map((a) => ({ email: a.email, name: a.name, type: a.type })),
+          reminderMinutes: reminderMinutesForPayload,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      showToast(`${title} rescheduled — all attendees notified`);
+      const failedCount = Array.isArray(data.notifyFailed) ? data.notifyFailed.length : 0;
+      if (failedCount > 0) {
+        showToast(`${title} updated, but the notification email failed for ${failedCount} attendee${failedCount > 1 ? "s" : ""}`);
+      } else {
+        showToast(`${title} updated — ${data.notified ?? 0} attendee(s) notified`);
+      }
       onRescheduleComplete?.();
       onClose();
     } catch (err) {
@@ -1850,7 +2008,8 @@ export function EventDrawer({
         throw new Error(created.error ?? `HTTP ${createRes.status}`);
       }
 
-      onCreate(title.trim(), getOccurrences(), buildMeta());
+      const draftIsBeingScheduled = initialStep === 2 && Boolean(editingEvent && String(editingEvent.id).startsWith("draft-"));
+      onCreate(title.trim(), getOccurrences(), draftIsBeingScheduled ? { ...buildMeta(), status: "SCHEDULED" } : buildMeta());
       showToast(`${title.trim()} created — ${resendRsvpMode ? "Resend RSVP invitations" : "Google event"}${created.hangoutLink ? " + Meet link" : ""} synced`);
       window.setTimeout(() => {
         if (recipients.length === 1) showToast(`Personalized invitation emailed to ${recipients[0].name}`);
@@ -1925,17 +2084,15 @@ export function EventDrawer({
       >
         {drawerStep === 1 ? (
           <>
-            <div className="drawer-heading"><h2>{rescheduleDate && editingEvent ? `Reschedule — ${title}` : editingEvent ? "Edit event" : "New Event"}</h2><button onClick={onClose} aria-label="Close"><X size={17} /></button></div>
+            <div className="drawer-heading"><h2>{rescheduleDate && editingEvent ? (isEditMode ? `Edit event — ${title}` : `Reschedule — ${title}`) : editingEvent ? "Edit event" : "New Event"}</h2><button onClick={onClose} aria-label="Close"><X size={17} /></button></div>
             <div className="drawer-body">
               <section className="drawer-form-column">
                 <label className="field-label"><span>Title<span className="required-star">*</span></span></label>
                 <input
                   className="drawer-title-input"
                   value={title}
-                  onChange={(event) => { if (rescheduleDate && editingEvent) return; setTitle(event.target.value); setError(false); }}
-                  readOnly={!!(rescheduleDate && editingEvent)}
+                  onChange={(event) => { setTitle(event.target.value); setError(false); }}
                   placeholder="Add a title"
-                  style={(rescheduleDate && editingEvent) ? { background: "#f8fafc", color: "#475569", cursor: "not-allowed" } : undefined}
                 />
                 {error && <p className="field-error"><FieldErrorIcon /> Event title is required</p>}
 
@@ -1947,7 +2104,7 @@ export function EventDrawer({
                     disabled={!!(rescheduleDate && editingEvent)}
                     aria-expanded={!!(rescheduleDate && editingEvent) ? false : eventTypeMenuOpen}
                     onClick={() => { if (rescheduleDate && editingEvent) return; setEventTypeMenuOpen((v) => !v); }}
-                    style={{ width: "100%", fontSize: 13, height: 39, ...((rescheduleDate && editingEvent) ? { background: "#f8fafc", color: "#475569", cursor: "not-allowed" } : {}) }}
+                    style={{ width: "100%", fontSize: 13, height: 39, ...((rescheduleDate && editingEvent) ? { backgroundColor: "#f8fafc", color: "#64748b" } : {}) }}
                   >
                     <span style={{ fontSize: 13 }}>{eventType}</span>
                     <ChevronDown size={15} />
@@ -2004,27 +2161,23 @@ export function EventDrawer({
                 </section>
 
                 <label className="field-label field-space attendee-field-label"><span>Attendees<span className="required-star">*</span></span><span className="attendee-count" aria-live="polite">{selectedAttendees.length} / {MAX_ATTENDEES}</span></label>
-                <AttendeePicker key={open ? `attendees-${slot.date}-${slot.hour}-${slot.minute}` : "attendees-closed"} selected={selectedAttendees} onRemove={removeAttendee} onSelect={selectAttendee} disabled={!!(rescheduleDate && editingEvent)} />
-                {rescheduleDate && editingEvent && (
-                  <p className="helper" style={{ marginTop: 6 }}><Lock size={13} /> Attendee list cannot be changed during reschedule.</p>
-                )}
+                <AttendeePicker key={open ? `attendees-${slot.date}-${slot.hour}-${slot.minute}` : "attendees-closed"} selected={selectedAttendees} onRemove={removeAttendee} onSelect={selectAttendee} />
                 {nativeMode && selectedAttendees.length > 0 && !(rescheduleDate && editingEvent) && (
                   <p className="helper" style={{ marginTop: 6 }}><Info size={14} /> Google will email each attendee its standard calendar invitation — no custom email in this mode.</p>
                 )}
 
                 <EventLocation
                   open={locationOpen}
-                  required={selectedAttendees.length > 0}
+                  required={hasInvitees}
                   onOpen={() => setLocationOpen(true)}
                   onRemove={() => setLocationOpen(false)}
                   showError={locationError}
                   onValidityChange={(valid) => { setLocationValid(valid); if (valid) setLocationError(false); }}
-                  initialLocation={editingEvent?.storedLocation ?? null}
+                  initialLocation={locationSnapshot ?? editingEvent?.storedLocation ?? null}
                   onLocationChange={setLocationSnapshot}
-                  disabled={!!(rescheduleDate && editingEvent)}
                 />
 
-                {!(rescheduleDate && editingEvent) && (
+                {(
                   <div className="reminder-block field-space" ref={reminderRef}>
                     <div className="reminder-title"><label className="field-label">Reminder</label><Toggle on={reminder} onClick={() => { setReminder((value) => !value); setReminderMenuOpen(false); }} label="Reminder" /></div>
                     {reminder && <><div className="reminder-controls"><input type="number" min="0" max={reminderLimits[reminderUnit].max} value={reminderValue} onChange={(event) => setReminderValue(event.target.value)} onBlur={() => { if (!reminderValue) setReminderValue(reminderDefaults[reminderUnit]); }} aria-label="Reminder value" /><div className="reminder-unit-wrap"><button className="select-like reminder-unit-select" type="button" aria-expanded={reminderMenuOpen} onClick={() => setReminderMenuOpen((value) => !value)}><span>{reminderUnit}</span><ChevronDown size={13} /></button>{reminderMenuOpen && <div className="reminder-unit-options" role="menu" aria-label="Reminder unit">{(["minutes", "hours", "days", "weeks"] as ReminderUnit[]).map((unit) => <button type="button" role="menuitem" onClick={() => { setReminderUnit(unit); setReminderValue(reminderDefaults[unit]); setReminderMenuOpen(false); }} key={unit}><span>{unit}</span>{reminderUnit === unit && <Check size={14} />}</button>)}</div>}</div></div><p className="helper"><Info size={14} /> {reminderLimits[reminderUnit].copy}</p></>}
@@ -2042,12 +2195,13 @@ export function EventDrawer({
               <div>
                 {rescheduleDate && editingEvent ? (
                   <button className="create-event-button" onClick={submit}>
-                    Reschedule <ArrowRight size={18} strokeWidth={1.9} />
+                    {isEditMode ? "Update event" : "Reschedule"} <ArrowRight size={18} strokeWidth={1.9} />
                   </button>
                 ) : nativeMode ? (
                   <button className="create-event-button" disabled={sending} onClick={submit}>{sending ? "Creating…" : <>Create event &amp; invite <ArrowRight size={18} strokeWidth={1.9} /></>}</button>
                 ) : (
                   <>
+                    <button className="save-draft-button" type="button" onClick={saveAsDraft}>Save as Draft</button>
                     <button className="save-logged-button" type="button" onClick={saveAsLogged}>Save as Logged</button>
                     <button className={`create-event-button ${shouldPreviewInvitation ? "" : "hug-content"}`} onClick={submit}>{shouldPreviewInvitation ? <>Preview invitation <ArrowRight size={18} strokeWidth={1.9} /></> : "Create event"}</button>
                   </>
@@ -2061,7 +2215,7 @@ export function EventDrawer({
             <div className="drawer-heading">
               <div className="drawer-heading-left">
                 <button className="drawer-back-btn" onClick={() => setDrawerStep(1)} aria-label="Back"><ChevronLeft size={18} /></button>
-                <h2>Review &amp; notify attendees</h2>
+                <h2>{isEditMode ? "Review & update event" : "Review & notify attendees"}</h2>
               </div>
               <button onClick={onClose} aria-label="Close"><X size={17} /></button>
             </div>

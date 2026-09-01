@@ -31,6 +31,9 @@ export async function DELETE(
   if (!event) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
+  if (event.source === "GOOGLE") {
+    return NextResponse.json({ error: "Google Calendar events are read-only in Wiggli." }, { status: 403 });
+  }
 
   try {
     await withFreshGoogleClient(session.accessToken!, event.organizerEmail, async (client) => {

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:restart": "node scripts/restart-dev.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -50,6 +51,7 @@
     "prisma": "^7.9.1",
     "sharp": "^0.35.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

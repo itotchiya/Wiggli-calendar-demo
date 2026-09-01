@@ -158,6 +158,27 @@ export function buildRequestIcs(input: IcsInput): string {
   return lines.join("\r\n") + "\r\n";
 }
 
+/**
+ * METHOD:CANCEL — RFC 5546 §3.2.5. Sent to attendees REMOVED from an event so
+ * their calendar copies are removed. Same UID + bumped SEQUENCE as the last
+ * REQUEST; STATUS:CANCELLED tells clients to strike the event, not add it.
+ */
+export function buildCancelIcs(input: IcsInput): string {
+  const now = new Date();
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    `PRODID:${input.prodId ?? "-//Wiggli//Calendar Invite Demo//EN"}`,
+    "CALSCALE:GREGORIAN",
+    "METHOD:CANCEL",
+    ...veventLines(input, now).map((line) =>
+      line === "STATUS:CONFIRMED" ? "STATUS:CANCELLED" : line
+    ),
+    "END:VCALENDAR",
+  ];
+  return lines.join("\r\n") + "\r\n";
+}
+
 export function buildMultiRequestIcs(inputs: IcsInput[]): string {
   if (inputs.length === 0) throw new Error("At least one ICS input is required");
   if (inputs.length === 1) return buildRequestIcs(inputs[0]!);

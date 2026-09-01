@@ -10,7 +10,7 @@ import { stripUnknownTokens } from "./invite-variables";
 import { buildSmartSlotNoticeText, emailHtmlToPlainText, sanitizeReviewedEmailHtml, withStyledSlotNotice } from "./smart-email-template";
 import { buildResendMessageId, sendResendCalendarEmail } from "./resend/calendar-email";
 import type { SmartEventDocument } from "./smart-event-schema";
-import type { CreateEventInput, EventDto, AttendeeDto } from "@/types/event";
+import type { CreateEventInput, EventDto, AttendeeDto, EventPreviewData } from "@/types/event";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -64,6 +64,7 @@ export function parseCreateInput(body: unknown): CreateEventInput {
 type EventRow = {
   id: string;
   googleEventId: string | null;
+  source: string;
   iCalUID: string;
   summary: string;
   eventType: string | null;
@@ -71,6 +72,7 @@ type EventRow = {
   location: string | null;
   hangoutLink: string | null;
   reminderMinutes: number | null;
+  previewData: unknown;
   start: Date;
   end: Date;
   timezone: string;
@@ -84,9 +86,14 @@ type EventRow = {
     name: string | null;
     type: string | null;
     rsvp: string;
+    comment: string | null;
     respondedAt: Date | null;
   }[];
 };
+
+function asPreviewData(value: unknown): EventPreviewData | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as EventPreviewData : null;
+}
 
 export type InviteThreadState = {
   threadId?: string;
@@ -100,6 +107,7 @@ function toDto(e: EventRow): EventDto {
   return {
     id: e.id,
     googleEventId: e.googleEventId,
+    source: e.source === "GOOGLE" ? "GOOGLE" : "WIGGLI",
     iCalUID: e.iCalUID,
     summary: e.summary,
     eventType: e.eventType,
@@ -111,6 +119,7 @@ function toDto(e: EventRow): EventDto {
     end: e.end.toISOString(),
     timezone: e.timezone,
     organizerEmail: e.organizerEmail,
+    previewData: asPreviewData(e.previewData),
     status: (e as { status?: string }).status === "CANCELLED" ? "CANCELLED" : "SCHEDULED",
     createdAt: e.createdAt.toISOString(),
     proposals: ((e as { proposals?: { id: string; attendeeEmail: string; slotLabel: string; note: string | null; status: string; createdAt: Date }[] }).proposals ?? []).map((p) => ({
@@ -128,6 +137,7 @@ function toDto(e: EventRow): EventDto {
       type: a.type,
       rsvp: a.rsvp as AttendeeDto["rsvp"],
       respondedAt: a.respondedAt ? a.respondedAt.toISOString() : null,
+      comment: a.comment,
     })),
   };
 }
@@ -243,6 +253,24 @@ export async function createEventAndInvite(opts: {
 
   // Single authoritative Meet link — the one Google provisioned on create.
   const hangoutLink = g.hangoutLink;
+  const organizerName = opts.smartDocument?.organizer.fullName || organizerEmail.split("@")[0];
+  const smartLocation = opts.smartDocument?.event.location;
+  const previewData = {
+    organizerName,
+    ...(opts.smartDocument?.organizer.avatar ? { organizerAvatar: opts.smartDocument.organizer.avatar } : {}),
+    attendeeAvatars: Object.fromEntries(
+      (opts.smartDocument?.attendees ?? []).filter((attendee) => attendee.avatar).map((attendee) => [attendee.email.toLowerCase(), attendee.avatar!])
+    ),
+    linkedTo: (opts.smartDocument?.linkedTo ?? []).map((record) => ({ type: record.type, label: record.label, ...(record.avatar ? { avatar: record.avatar } : {}) })),
+    locations: smartLocation && smartLocation.type !== "none" && smartLocation.type !== "online" && smartLocation.value
+      ? [{ label: smartLocation.value, type: smartLocation.type === "company" ? "Company office" : "Another location" }]
+      : [],
+    meetingLinks: hangoutLink
+      ? [{ provider: "Google Meet", url: hangoutLink }]
+      : smartLocation?.type === "online" && smartLocation.value
+        ? [{ provider: smartLocation.provider || "Meeting", url: smartLocation.value }]
+        : [],
+  };
 
   // 3. Local persistence
   const event = await db.event.create({
@@ -255,6 +283,7 @@ export async function createEventAndInvite(opts: {
       location: hangoutLink ?? input.location ?? null,
       hangoutLink,
       reminderMinutes: opts.reminderMinutes ?? null,
+      previewData,
       start: startUtc,
       end: endUtc,
       timezone: input.timezone,
@@ -296,7 +325,6 @@ export async function createEventAndInvite(opts: {
     opts.reminderMinutes != null
       ? `${opts.reminderMinutes} minutes before`
       : null;
-  const organizerName = opts.smartDocument?.organizer.fullName || organizerEmail.split("@")[0];
   const organizerPhone = opts.smartDocument?.organizer.phone ?? "";
 
   const whenLabel = formatEventRange(startUtc, endUtc, input.timezone);

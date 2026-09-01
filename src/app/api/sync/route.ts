@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { syncAllEvents, syncEventById } from "@/lib/sync-service";
+import { syncEventById, syncGoogleCalendar } from "@/lib/sync-service";
 import { syncInboundGmailReplies } from "@/lib/google/gmail-replies";
 import { syncInboundProposals } from "@/lib/google/proposal-sync";
+import { AuthExpiredError } from "@/lib/google-auth";
 
 /**
  * Mirror native calendar RSVP responses into SQLite.
@@ -46,9 +47,28 @@ export async function POST(req: Request) {
         errors: [(error as Error).message],
       };
     }
-    const result = eventId
+    // The full Calendar API response already contains each attendee's current
+    // RSVP state, so a second events.get request per stored event is redundant
+    // (and quickly exhausts Google's per-user query quota). Keep the targeted
+    // per-event path for the preview refresh button only.
+    const attendeeResult = eventId
       ? (await syncEventById(session.accessToken, eventId)).result
-      : await syncAllEvents(session.accessToken);
+      : { syncedEvents: 0, updatedAttendees: 0, importedEvents: 0, updatedEvents: 0, errors: [] as string[] };
+
+    // Pull the organizer's primary calendar into the same event list. This is
+    // intentionally part of the existing sync request so the dashboard's
+    // 15-second poll keeps both Wiggli and external Google events current.
+    const calendarSync = await syncGoogleCalendar(
+      session.accessToken,
+      session.user.email.toLowerCase(),
+      eventId ?? undefined
+    );
+    const result = {
+      ...attendeeResult,
+      importedEvents: calendarSync.importedEvents,
+      updatedEvents: calendarSync.updatedEvents,
+      errors: [...attendeeResult.errors, ...calendarSync.errors],
+    };
 
     // "Propose a new time" notifications live only in Gmail (the Calendar API
     // never exposes counter-proposals) — scan them in the same pass.
@@ -66,10 +86,14 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: result.errors.length === 0 && inboundReplies.errors.length === 0 && proposals.errors.length === 0,
       ...result,
+      calendarSync,
       inboundReplies,
       proposals,
     });
   } catch (err) {
+    if (err instanceof AuthExpiredError) {
+      return NextResponse.json({ error: err.message, code: "AUTH_EXPIRED" }, { status: 401 });
+    }
     console.error("[sync]", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Sync failed" },

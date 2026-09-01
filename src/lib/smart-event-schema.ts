@@ -6,6 +6,7 @@ export type SmartLinkedRecord = {
   type: SmartLinkedType;
   id: string;
   label: string;
+  avatar?: string;
   variable: string;
 };
 
@@ -38,6 +39,7 @@ export type SmartEventDocument = {
   organizer: {
     fullName: string;
     email: string;
+    avatar?: string;
     phone?: string;
   };
   linkedTo: SmartLinkedRecord[];
@@ -46,6 +48,7 @@ export type SmartEventDocument = {
     type: SmartAttendeeType;
     fullName: string;
     email: string;
+    avatar?: string;
   }[];
   audiences: {
     type: SmartAudience;
@@ -171,6 +174,7 @@ export function parseSmartEventDocument(value: unknown): SmartEventDocument {
       type: record.type,
       id: requiredString(record.id, "Linked record id"),
       label: requiredString(record.label, "Linked record label"),
+      avatar: optionalString(record.avatar),
       variable: expectedVariable,
     };
   });
@@ -188,6 +192,7 @@ export function parseSmartEventDocument(value: unknown): SmartEventDocument {
       type: type as SmartAttendeeType,
       fullName: requiredString(attendee.fullName, "Attendee name"),
       email,
+      avatar: optionalString(attendee.avatar),
     };
   });
   if (attendees.length === 0) throw new Error("At least one Smart Event attendee is required.");
@@ -229,6 +234,7 @@ export function parseSmartEventDocument(value: unknown): SmartEventDocument {
     organizer: {
       fullName: requiredString(organizerRaw.fullName, "Organizer name"),
       email: organizerEmail,
+      avatar: optionalString(organizerRaw.avatar),
       phone: optionalString(organizerRaw.phone),
     },
     linkedTo,

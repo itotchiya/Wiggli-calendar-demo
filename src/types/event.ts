@@ -26,6 +26,7 @@ export type AttendeeDto = {
   type: string | null;
   rsvp: RsvpStatus;
   respondedAt: string | null;
+  comment: string | null;
 };
 
 export type ProposalDto = {
@@ -37,9 +38,19 @@ export type ProposalDto = {
   createdAt: string;
 };
 
+export type EventPreviewData = {
+  organizerName?: string;
+  organizerAvatar?: string;
+  attendeeAvatars?: Record<string, string>;
+  linkedTo?: { type: string; label: string; avatar?: string }[];
+  locations?: { label: string; type?: string }[];
+  meetingLinks?: { provider: string; url: string }[];
+};
+
 export type EventDto = {
   id: string;
   googleEventId: string | null;
+  source: "WIGGLI" | "GOOGLE";
   iCalUID: string;
   summary: string;
   eventType: string | null;
@@ -51,6 +62,7 @@ export type EventDto = {
   end: string;
   timezone: string;
   organizerEmail: string;
+  previewData: EventPreviewData | null;
   status: "SCHEDULED" | "CANCELLED";
   createdAt: string;
   attendees: AttendeeDto[];

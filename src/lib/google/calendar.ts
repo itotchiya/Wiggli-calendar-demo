@@ -110,8 +110,80 @@ export async function createGoogleEvent(
 export type GoogleAttendeeStatus = {
   email: string;
   rsvp: "NEEDS_ACTION" | "ACCEPTED" | "TENTATIVE" | "DECLINED";
+  comment: string | null;
   respondedAt: string | null;
 };
+
+/** Small, serializable subset of a Google Calendar event used by the sync layer. */
+export type GoogleCalendarEventRecord = {
+  id: string;
+  iCalUID?: string | null;
+  status?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  location?: string | null;
+  hangoutLink?: string | null;
+  htmlLink?: string | null;
+  start?: { dateTime?: string | null; date?: string | null; timeZone?: string | null } | null;
+  end?: { dateTime?: string | null; date?: string | null; timeZone?: string | null } | null;
+  organizer?: { email?: string | null; displayName?: string | null } | null;
+  attendees?: { email?: string | null; displayName?: string | null; responseStatus?: string | null; comment?: string | null }[] | null;
+  reminders?: { useDefault?: boolean | null; overrides?: { method?: string | null; minutes?: number | null }[] | null } | null;
+  conferenceData?: { entryPoints?: { entryPointType?: string | null; uri?: string | null }[] | null } | null;
+};
+
+export type GoogleCalendarListOptions = {
+  /** Optional bounds; omitted bounds let Google return the complete primary calendar. */
+  timeMin?: Date;
+  timeMax?: Date;
+  timeZone?: string;
+};
+
+/** List the organizer's primary-calendar events, including expanded recurring instances. */
+export async function listGoogleCalendarEvents(
+  accessToken: string,
+  options: GoogleCalendarListOptions = {}
+): Promise<GoogleCalendarEventRecord[]> {
+  return listGoogleCalendarEventsWithClient(getGoogleClient(accessToken), options);
+}
+
+/** Same operation for a client obtained through withFreshGoogleClient (including refresh fallback). */
+export async function listGoogleCalendarEventsWithClient(
+  authClient: ReturnType<typeof getGoogleClient>,
+  options: GoogleCalendarListOptions = {}
+): Promise<GoogleCalendarEventRecord[]> {
+  const calendar = google.calendar({ version: "v3", auth: authClient });
+  const result: GoogleCalendarEventRecord[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const response = await calendar.events.list({
+      calendarId: "primary",
+      maxResults: 2500,
+      orderBy: "startTime",
+      showDeleted: true,
+      singleEvents: true,
+      ...(options.timeMin ? { timeMin: options.timeMin.toISOString() } : {}),
+      ...(options.timeMax ? { timeMax: options.timeMax.toISOString() } : {}),
+      ...(options.timeZone ? { timeZone: options.timeZone } : {}),
+      ...(pageToken ? { pageToken } : {}),
+    });
+    result.push(...((response.data.items ?? []) as GoogleCalendarEventRecord[]).filter((event) => Boolean(event.id)));
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return result;
+}
+
+/** Fetch one event by its Google id for a single-event refresh. */
+export async function getGoogleCalendarEventWithClient(
+  authClient: ReturnType<typeof getGoogleClient>,
+  googleEventId: string
+): Promise<GoogleCalendarEventRecord> {
+  const calendar = google.calendar({ version: "v3", auth: authClient });
+  const response = await calendar.events.get({ calendarId: "primary", eventId: googleEventId });
+  return response.data as GoogleCalendarEventRecord;
+}
 
 /**
  * Cancel (delete) an event on the organizer's primary calendar.
@@ -149,10 +221,11 @@ export async function fetchEventRsvp(
   });
 
   return (response.data.attendees ?? [])
-    .filter((a): a is { email: string; responseStatus?: string } => Boolean(a.email))
+    .filter((a): a is { email: string; responseStatus?: string; comment?: string | null } => Boolean(a.email))
     .map((a) => ({
       email: a.email.toLowerCase(),
       rsvp: normalizeRsvp(a.responseStatus),
+      comment: a.comment?.trim() || null,
       respondedAt: null,
     }));
 }

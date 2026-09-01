@@ -25,9 +25,35 @@ export function startOfWeek(date: Date) {
   return addDays(date, -date.getUTCDay());
 }
 
+export const CALENDAR_TIME_ZONE = "Africa/Casablanca";
+
+export function getCalendarTime(timeZone = CALENDAR_TIME_ZONE) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return {
+    date: `${value("year")}-${String(value("month")).padStart(2, "0")}-${String(value("day")).padStart(2, "0")}`,
+    hour: value("hour"),
+    minute: value("minute"),
+  };
+}
+
+export function getCalendarOffsetLabel(timeZone = CALENDAR_TIME_ZONE) {
+  const offset = new Intl.DateTimeFormat("en", { timeZone, timeZoneName: "shortOffset" })
+    .formatToParts(new Date())
+    .find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  return offset.replace("GMT", "UTC");
+}
+
 export function getTodayUtcPlusTwo() {
-  const utcPlusTwo = new Date(Date.now() + 2 * 60 * 60 * 1000);
-  return new Date(Date.UTC(utcPlusTwo.getUTCFullYear(), utcPlusTwo.getUTCMonth(), utcPlusTwo.getUTCDate()));
+  return parseDateKey(getCalendarTime().date);
 }
 
 export function formatMonthYear(date: Date) {
@@ -52,12 +78,7 @@ export function formatPickerLabel(date: Date) {
 }
 
 export function getUtcPlusTwoCalendarTime() {
-  const utcPlusTwo = new Date(Date.now() + 2 * 60 * 60 * 1000);
-  return {
-    date: dateKey(new Date(Date.UTC(utcPlusTwo.getUTCFullYear(), utcPlusTwo.getUTCMonth(), utcPlusTwo.getUTCDate()))),
-    hour: utcPlusTwo.getUTCHours(),
-    minute: utcPlusTwo.getUTCMinutes(),
-  };
+  return getCalendarTime();
 }
 
 export function getNextQuarterSlot() {

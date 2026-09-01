@@ -15,6 +15,7 @@ datasource db {
 model Event {
   id             String   @id @default(cuid())
   googleEventId  String? // Google Calendar event ID, set after events.insert
+  source         String   @default("WIGGLI") // WIGGLI-created event or imported GOOGLE event
   iCalUID        String   @unique // shared between GCal event & our .ics attachment
   summary        String
   eventType      String?
@@ -34,6 +35,7 @@ model Event {
   rescheduleNote String?
   hangoutLink    String? // real Google Meet URL when a conference was provisioned
   reminderMinutes Int? // null = calendar default; stored for email rendering
+  previewData     Json? // organizer profile, avatars, linked records, locations, meeting links
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -41,6 +43,7 @@ model Event {
   proposals EventProposal[]
 
   @@index([googleEventId])
+  @@index([source])
 }
 
 /** A "Propose a new time" counter-proposal detected from the organizer's Gmail. */
@@ -69,6 +72,7 @@ model Attendee {
   name        String?
   type        String? // drawer attendee type: candidate | freelancer | contact | internal
   rsvp        String    @default("NEEDS_ACTION") // NEEDS_ACTION | ACCEPTED | TENTATIVE | DECLINED
+  comment     String? // Optional response comment from Google Calendar
   respondedAt DateTime?
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)

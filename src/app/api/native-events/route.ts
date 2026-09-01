@@ -70,10 +70,22 @@ export async function POST(req: Request) {
       name: typeof a.name === "string" ? a.name : undefined,
       type: typeof a.type === "string" ? a.type : undefined,
     }));
-  if (attendees.length === 0)
-    return NextResponse.json({ error: "At least one valid attendee email is required." }, { status: 400 });
+  const attendeeAvatars = Object.fromEntries(
+    rawAttendees
+      .map((a) => a as { email?: unknown; avatar?: unknown })
+      .filter((a) => typeof a.email === "string" && typeof a.avatar === "string" && a.avatar)
+      .map((a) => [(a.email as string).toLowerCase(), a.avatar as string])
+  );
+  const linkedTo = (Array.isArray(body.linkedRecords) ? body.linkedRecords : []).flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const record = value as { type?: unknown; label?: unknown; avatar?: unknown };
+    return typeof record.type === "string" && typeof record.label === "string"
+      ? [{ type: record.type, label: record.label, ...(typeof record.avatar === "string" && record.avatar ? { avatar: record.avatar } : {}) }]
+      : [];
+  });
 
   const organizerEmail = session.user.email.toLowerCase();
+  const organizerName = session.user.name?.trim() || organizerEmail.split("@")[0];
 
   try {
     const { zonedWallClockToUtc } = await import("@/lib/datetime");
@@ -120,6 +132,14 @@ export async function POST(req: Request) {
             hangoutLink: result.hangoutLink,
             reminderMinutes:
               body.reminderMinutes == null ? null : Math.max(0, Number(body.reminderMinutes) || 0),
+            previewData: {
+              organizerName,
+              ...(typeof body.organizerAvatar === "string" && body.organizerAvatar ? { organizerAvatar: body.organizerAvatar } : {}),
+              attendeeAvatars,
+              linkedTo,
+              locations: str("location") ? [{ label: str("location"), type: body.locationType === "company" ? "Company office" : body.locationType === "custom" ? "Another location" : undefined }] : [],
+              meetingLinks: result.hangoutLink ? [{ provider: "Google Meet", url: result.hangoutLink }] : [],
+            },
             start: startUtc,
             end: endUtc,
             timezone,
