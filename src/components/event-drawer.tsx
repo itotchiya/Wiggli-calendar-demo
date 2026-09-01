@@ -153,8 +153,6 @@ const attendeeTypeLabels: Record<AttendeeType, string> = {
   internal: "Internal attendee",
 };
 
-const MAX_ATTENDEES = 10;
-
 const TEST_EMAILS = [
   "linksomoney@gmail.com",
   "luxqoox@gmail.com",
@@ -393,7 +391,6 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
   const [menu, setMenu] = useState<"types" | AttendeeType | null>(null);
   const [query, setQuery] = useState("");
   const pickerRef = useRef<HTMLDivElement>(null);
-  const atLimit = selected.length >= MAX_ATTENDEES;
   const typeIcons: Record<AttendeeType, IconType> = { candidate: UserRound, freelancer: BriefcaseBusiness, contact: ContactRound, internal: UsersRound };
   const activePeople = menu && menu !== "types" ? attendeeDirectory[menu].filter((person) => `${person.name} ${person.email}`.toLowerCase().includes(query.toLowerCase())) : [];
 
@@ -406,7 +403,7 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
   }, []);
 
   const chooseType = (type: AttendeeType) => {
-    if (atLimit || disabled) return;
+    if (disabled) return;
     setQuery("");
     setMenu(type);
   };
@@ -417,7 +414,7 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
         <AttendeeChip name="Kai Zeller" type="Organizer" organizer />
         {selected.map((person) => <AttendeeChip name={person.name} type={attendeeTypeLabels[person.type]} avatar={person.avatar} onRemove={disabled || person.locked ? undefined : () => onRemove(person.id)} key={person.id} />)}
         {!disabled && (
-          <button className="add-attendee-button" type="button" disabled={atLimit} aria-label={atLimit ? "Maximum of 10 attendees reached" : "Add attendee"} aria-expanded={menu !== null} title={atLimit ? "Maximum of 10 attendees reached" : undefined} onClick={() => setMenu((current) => current ? null : "types")}><Plus size={21} /></button>
+          <button className="add-attendee-button" type="button" aria-label="Add attendee" aria-expanded={menu !== null} onClick={() => setMenu((current) => current ? null : "types")}><Plus size={21} /></button>
         )}
       </div>
 
@@ -427,7 +424,7 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
             const Icon = typeIcons[type];
             return (
               <div key={type} className="attendee-type-option-wrap group relative">
-                <button type="button" role="menuitem" disabled={atLimit} onClick={() => chooseType(type)} className="w-full"><Icon size={20} /><span>{attendeeTypeLabels[type]}</span></button>
+                <button type="button" role="menuitem" onClick={() => chooseType(type)} className="w-full"><Icon size={20} /><span>{attendeeTypeLabels[type]}</span></button>
               </div>
             );
           })}
@@ -441,7 +438,7 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
           <div className="attendee-results">
             {activePeople.map((person) => {
               const alreadySelected = selected.some((item) => item.id === person.id);
-              return <button type="button" disabled={alreadySelected || atLimit} onClick={() => { onSelect(person); setMenu(null); setQuery(""); }} aria-label={`Select ${person.name}`} key={person.id}><AttendeeAvatar name={person.name} avatar={person.avatar} /><span style={{ gap: 1 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{person.name}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{person.email}</small></span>{alreadySelected && <Check size={16} />}</button>;
+              return <button type="button" disabled={alreadySelected} onClick={() => { onSelect(person); setMenu(null); setQuery(""); }} aria-label={`Select ${person.name}`} key={person.id}><AttendeeAvatar name={person.name} avatar={person.avatar} /><span style={{ gap: 1 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{person.name}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{person.email}</small></span>{alreadySelected && <Check size={16} />}</button>;
             })}
             {activePeople.length === 0 && <p>No attendees found.</p>}
           </div>
@@ -884,24 +881,11 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
   const [providerChoice, setProviderChoice] = useState<MeetingProvider>(() => (initialLocation?.provider as MeetingProvider) ?? "wiggli");
   const [manualUrl, setManualUrl] = useState(() => initialLocation?.manualUrl ?? "");
   const [aiNotetaker, setAiNotetaker] = useState(() => initialLocation?.aiNotetaker ?? false);
-  const [linkLoading, setLinkLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   // Google Meet is provisioned by Google when the event is created — no
   // pre-provisioning here (that produced a duplicate link in Location).
   const instantMeetLink = null as string | null;
-  const meetLinkError = null as string | null;
-
-  // Demo build: Google suite is the connected integration (matches real backend).
-  const integrations = { suite: "google" as "google" | "outlook", emailSynced: { google: true, outlook: false }, calendarSynced: { google: true, outlook: false }, zoomConnected: false };
-  const meetEnabled = integrations.suite === "google" && integrations.calendarSynced.google;
-  const teamsEnabled = integrations.suite === "outlook" && integrations.calendarSynced.outlook;
-  const zoomEnabled = integrations.zoomConnected;
-  const provider: MeetingProvider =
-    (providerChoice === "google" && !meetEnabled) ||
-    (providerChoice === "teams" && !teamsEnabled) ||
-    (providerChoice === "zoom" && !zoomEnabled)
-      ? "wiggli"
-      : providerChoice;
+  const provider = providerChoice;
   const locationRef = useRef<HTMLElement>(null);
   const offices = ["Paris HQ — 12 Rue de la Paix, 75002 Paris", "Brussels Office — 18 Avenue Louise, 1050 Brussels", "London Hub — 25 Old Street, EC1V London", "Casablanca Office — 42 Boulevard Zerktouni, Casablanca"];
   const locationOptions = [{ id: "company" as const, label: "Company address", icon: Building2 }, { id: "custom" as const, label: "Custom location", icon: MapPin }, { id: "online" as const, label: "Online", icon: Video }];
@@ -963,7 +947,6 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
     setProviderChoice("wiggli");
     setManualUrl("");
     setAiNotetaker(false);
-    setLinkLoading(false);
   }, [open]);
 
   const locationValid = locationType === "company" ? Boolean(selectedOffice) : locationType === "custom" ? Boolean(street.trim() && city.trim() && country.trim()) : locationType === "online" ? (providerChoice === "manual" ? Boolean(manualUrl.trim()) : true) : true;
@@ -971,16 +954,6 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
   useEffect(() => {
     onValidityChange?.(locationValid);
   }, [locationValid]);
-
-  useEffect(() => {
-    if (locationType === "online" && providerChoice !== "manual") {
-      setLinkLoading(true);
-      const t = window.setTimeout(() => setLinkLoading(false), 1200);
-      return () => window.clearTimeout(t);
-    } else {
-      setLinkLoading(false);
-    }
-  }, [providerChoice, locationType]);
 
   useEffect(() => { setCopied(false); }, [conferenceLink]);
 
@@ -1044,41 +1017,25 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
               <button className="location-select" type="button" aria-expanded={providerMenuOpen} onClick={() => { setProviderMenuOpen((value) => !value); setLocationMenuOpen(false); setOfficeMenuOpen(false); }} style={{ fontSize: 13, height: 39 }}><span style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>{provider === "manual" ? <Link2 size={16} /> : <img className="meeting-provider-logo" src={providerLogo} alt="" />}{meetingProviders[provider].label}</span><ChevronDown size={15} /></button>
               {providerMenuOpen && <div className="provider-options" role="menu" aria-label="Online meeting provider">
                 <button type="button" role="menuitem" onClick={() => { setProviderChoice("wiggli"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/wiggli-meet.png" alt="" />Wiggli Meet</span>{provider === "wiggli" && <Check size={14} />}</button>
-                {meetEnabled ? (
-                  <button type="button" role="menuitem" onClick={() => { setProviderChoice("google"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/google-meet.png" alt="" />Google Meet</span>{provider === "google" && <Check size={14} />}</button>
-                ) : (
-                  <div className="provider-option locked" tabIndex={0} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/google-meet.png" alt="" />Google Meet</span><Lock size={14} /><div className="provider-tooltip" role="tooltip"><strong>Google Calendar Required</strong><p>Go to <b>My profile → My Wiggli Mail</b> then select Google Calendar as your active calendar.</p><a href="/settings/profile#wiggli-mail" target="_blank" rel="noreferrer">Switch to Google Calendar <ExternalLink size={11} /></a></div></div>
-                )}
-                {teamsEnabled ? (
-                  <button type="button" role="menuitem" onClick={() => { setProviderChoice("teams"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/microsoft-teams.png" alt="" />Microsoft Teams</span>{provider === "teams" && <Check size={14} />}</button>
-                ) : (
-                  <div className="provider-option locked" tabIndex={0} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/microsoft-teams.png" alt="" />Microsoft Teams</span><Lock size={14} /><div className="provider-tooltip" role="tooltip"><strong>Outlook Calendar Required</strong><p>Go to <b>My profile → My Wiggli Mail</b> then select Outlook Calendar as your active calendar.</p><a href="/settings/profile#wiggli-mail" target="_blank" rel="noreferrer">Switch to Outlook Calendar <ExternalLink size={11} /></a></div></div>
-                )}
-                {zoomEnabled ? (
-                  <button type="button" role="menuitem" onClick={() => { setProviderChoice("zoom"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/Zoom-logo.png" alt="" />Zoom</span>{provider === "zoom" && <Check size={14} />}</button>
-                ) : (
-                  <div className="provider-option disconnected" tabIndex={0} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/Zoom-logo.png" alt="" />Zoom</span><small>Not connected</small><div className="provider-tooltip" role="tooltip"><strong>Zoom not connected</strong><p>Go to <b>My profile → Video Meetings</b> then connect Zoom, or connect directly below.</p><a href="/settings/profile#video-meetings" target="_blank" rel="noreferrer">Connect Zoom <ExternalLink size={11} /></a></div></div>
-                )}
+                <button type="button" role="menuitem" onClick={() => { setProviderChoice("google"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/google-meet.png" alt="" />Google Meet</span>{provider === "google" && <Check size={14} />}</button>
+                <button type="button" role="menuitem" onClick={() => { setProviderChoice("teams"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/microsoft-teams.png" alt="" />Microsoft Teams</span>{provider === "teams" && <Check size={14} />}</button>
+                <button type="button" role="menuitem" onClick={() => { setProviderChoice("zoom"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13 }}><img className="meeting-provider-logo" src="/Zoom-logo.png" alt="" />Zoom</span>{provider === "zoom" && <Check size={14} />}</button>
                 <button type="button" role="menuitem" onClick={() => { setProviderChoice("manual"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}><Link2 size={16} />Manual URL</span>{provider === "manual" && <Check size={14} />}</button>
               </div>}
             </div>
-            {provider === "manual" ? <>
+            {provider === "teams" ? <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "11px 12px", border: "1px solid #fde7b0", borderRadius: 9, background: "#fffbeb", color: "#a15c00" }}><AlertTriangle size={22} style={{ flex: "none" }} /><div style={{ fontSize: 13, lineHeight: 1.35 }}>Connect your Outlook Calendar to generate a Microsoft Teams link.<br /><button type="button" className="field-error-action" style={{ color: "#9a5900", marginTop: 3 }}>Connect now</button></div></div> : provider === "google" ? null : provider === "manual" ? <>
               <label className="field-label" style={{ fontSize: 13, marginTop: 12, marginBottom: 0 }}>Meeting link<span className="required-star">*</span></label>
               <input className="drawer-title-input" value={manualUrl} onChange={(event) => setManualUrl(event.target.value)} placeholder="Add meeting link" aria-label="Add meeting link" style={{ height: 39, fontSize: 13 }} />
             </> : <>
               <label className="field-label" style={{ fontSize: 13, marginTop: 12, marginBottom: 0 }}>Meeting link</label>
               <div style={{ minHeight: 39, height: 39, display: "flex", alignItems: "center", width: "100%", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 9, padding: "0 11px" }}>
-                {provider === "google" ? (
-                  <span style={{ fontSize: 13, flex: 1, color: "#475569" }}>A Google Meet link will be generated when the event is created.</span>
-                ) : (
-                  <><span style={{ fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#334155" }}>{conferenceLink}</span><button type="button" aria-label={copied ? "Copied" : "Copy meeting link"} title={copied ? "Copied!" : "Copy link"} onClick={async () => { try { await navigator.clipboard.writeText(conferenceLink); showToast("Link copied"); setCopied(true); window.setTimeout(() => setCopied(false), 2000); } catch {} }} style={{ width: 28, height: 28, flex: "none", display: "grid", placeItems: "center", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, marginLeft: 8, cursor: "pointer" }} className="copy-meeting-link">{copied ? <Check size={14} /> : <Copy size={14} />}</button></>
-                )}
+                <><span style={{ fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#334155" }}>{conferenceLink}</span><button type="button" aria-label={copied ? "Copied" : "Copy meeting link"} title={copied ? "Copied!" : "Copy link"} onClick={async () => { try { await navigator.clipboard.writeText(conferenceLink); showToast("Link copied"); setCopied(true); window.setTimeout(() => setCopied(false), 2000); } catch {} }} style={{ width: 28, height: 28, flex: "none", display: "grid", placeItems: "center", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, marginLeft: 8, cursor: "pointer" }} className="copy-meeting-link">{copied ? <Check size={14} /> : <Copy size={14} />}</button></>
               </div>
             </>}
           </>}
         </div>
       )}
-      {locationType === "online" && open && (
+      {false && locationType === "online" && open && (
         <div className="location-card" style={{ marginTop: 12, padding: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#334158", fontWeight: 500 }}><span style={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g clipPath="url(#clip0_359_159930)"><path d="M10.4016 3.78516L12.0547 8.08305C12.2864 8.68548 12.4022 8.98669 12.5824 9.24006C12.742 9.46461 12.9382 9.66081 13.1628 9.82048C13.4162 10.0006 13.7174 10.1165 14.3198 10.3482L18.6177 12.0012L14.3198 13.6543C13.7174 13.886 13.4162 14.0018 13.1628 14.182C12.9382 14.3416 12.742 14.5378 12.5824 14.7624C12.4022 15.0158 12.2864 15.317 12.0547 15.9194L10.4016 20.2173L8.74858 15.9194C8.51688 15.317 8.40103 15.0158 8.22087 14.7624C8.0612 14.5378 7.865 14.3416 7.64045 14.182C7.38708 14.0018 7.08587 13.886 6.48344 13.6543L2.18555 12.0012L6.48344 10.3482C7.08587 10.1165 7.38708 10.0006 7.64045 9.82048C7.865 9.66081 8.0612 9.46461 8.22087 9.24006C8.40103 8.98669 8.51688 8.68548 8.74858 8.08305L10.4016 3.78516Z" fill="#00CB24" stroke="#00CB24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.6176 2.73438L19.1796 4.19561C19.2584 4.40043 19.2978 4.50284 19.359 4.58898C19.4133 4.66532 19.48 4.73203 19.5563 4.78631C19.6425 4.84756 19.7449 4.88695 19.9497 4.96573L21.4109 5.52774L19.9497 6.08975C19.7449 6.16853 19.6425 6.20792 19.5563 6.26917C19.48 6.32346 19.4133 6.39016 19.359 6.4665C19.2978 6.55265 19.2584 6.65505 19.1796 6.85987L18.6176 8.32111L18.0556 6.85987C17.9768 6.65505 17.9374 6.55265 17.8762 6.4665C17.8219 6.39016 17.7552 6.32346 17.6788 6.26917C17.5927 6.20792 17.4903 6.16853 17.2855 6.08975L15.8242 5.52774L17.2855 4.96573C17.4903 4.88695 17.5927 4.84756 17.6788 4.78631C17.7552 4.73203 17.8219 4.66532 17.8762 4.58898C17.9374 4.50283 17.9768 4.40043 18.0556 4.19561L18.6176 2.73438Z" fill="#00CB24" stroke="#00CB24" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.5676 17.1523L18.8457 17.8753C18.8847 17.9767 18.9042 18.0273 18.9345 18.0699C18.9613 18.1077 18.9943 18.1407 19.0321 18.1676C19.0747 18.1979 19.1254 18.2174 19.2267 18.2564L19.9497 18.5344L19.2267 18.8125C19.1254 18.8515 19.0747 18.871 19.0321 18.9013C18.9943 18.9281 18.9613 18.9611 18.9345 18.9989C18.9042 19.0415 18.8847 19.0922 18.8457 19.1935L18.5676 19.9165L18.2896 19.1935C18.2506 19.0922 18.2311 19.0415 18.2008 18.9989C18.1739 18.9611 18.1409 18.9281 18.1032 18.9013C18.0605 18.871 18.0099 18.8515 17.9085 18.8125L17.1855 18.5344L17.9085 18.2564C18.0099 18.2174 18.0605 18.1979 18.1032 18.1676C18.1409 18.1407 18.1739 18.1077 18.2008 18.0699C18.2311 18.0273 18.2506 17.9767 18.2896 17.8753L18.5676 17.1523Z" fill="#00CB24" stroke="#00CB24" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round"/></g><defs><clipPath id="clip0_359_159930"><rect width="24" height="24" fill="white"/></clipPath></defs></svg></span> Wiggli AI Notetaker</span>
@@ -1247,6 +1204,7 @@ export function EventDrawer({
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [selectedContext, setSelectedContext] = useState<LinkedContext | null>(null);
   const [locationOpen, setLocationOpen] = useState(false);
+  const previousHasInvitees = useRef(false);
   const [locationSnapshot, setLocationSnapshot] = useState<LocationSnapshot | null>(null);
   const [error, setError] = useState(false);
   const [orgError, setOrgError] = useState(false);
@@ -1359,7 +1317,7 @@ export function EventDrawer({
   const hasInvitees = selectedAttendees.length > 0;
 
   const selectAttendee = (person: AttendeePerson) => {
-    setSelectedAttendees((current) => current.length >= MAX_ATTENDEES || current.some((attendee) => attendee.id === person.id) ? current : [...current, person]);
+    setSelectedAttendees((current) => current.some((attendee) => attendee.id === person.id) ? current : [...current, person]);
   };
 
   const removeAttendee = (id: string) => {
@@ -1383,7 +1341,6 @@ export function EventDrawer({
       for (const rec of linkedCandidatesContacts) {
         const id = rec.item.id;
         if (next.some((p) => p.id === id)) continue;
-        if (next.length >= MAX_ATTENDEES) break;
         let person: AttendeePerson | undefined;
         if (rec.type === "Candidate") person = attendeeDirectory.candidate.find((p) => p.id === id);
         else if (rec.type === "Contact") person = attendeeDirectory.contact.find((p) => p.id === id);
@@ -1404,12 +1361,14 @@ export function EventDrawer({
   }, [linkedRecords]);
 
   useEffect(() => {
-    if (hasInvitees) {
+    if (hasInvitees && !previousHasInvitees.current) {
       setLocationOpen(true);
-      return;
     }
-    setLocationOpen(false);
-    setLocationError(false);
+    if (!hasInvitees && previousHasInvitees.current) {
+      setLocationOpen(false);
+      setLocationError(false);
+    }
+    previousHasInvitees.current = hasInvitees;
   }, [hasInvitees]);
 
   useEffect(() => {
@@ -2160,7 +2119,7 @@ export function EventDrawer({
                   />
                 </section>
 
-                <label className="field-label field-space attendee-field-label"><span>Attendees<span className="required-star">*</span></span><span className="attendee-count" aria-live="polite">{selectedAttendees.length} / {MAX_ATTENDEES}</span></label>
+                <label className="field-label field-space attendee-field-label"><span>Attendees<span className="required-star">*</span></span></label>
                 <AttendeePicker key={open ? `attendees-${slot.date}-${slot.hour}-${slot.minute}` : "attendees-closed"} selected={selectedAttendees} onRemove={removeAttendee} onSelect={selectAttendee} />
                 {nativeMode && selectedAttendees.length > 0 && !(rescheduleDate && editingEvent) && (
                   <p className="helper" style={{ marginTop: 6 }}><Info size={14} /> Google will email each attendee its standard calendar invitation — no custom email in this mode.</p>

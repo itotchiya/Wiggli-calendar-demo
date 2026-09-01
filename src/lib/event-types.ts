@@ -9,13 +9,14 @@ export type EventTypeDefinition = {
 };
 
 export const defaultEventTypes: EventTypeDefinition[] = [
+  { id: "meeting", name: "Meeting", description: "A general discussion to share information, align on a topic, or agree on next steps." },
   { id: "call", name: "Call", description: "A phone conversation to discuss, clarify, or follow up on a specific topic." },
   { id: "interview", name: "Interview", description: "A structured conversation to evaluate a candidate's experience and suitability for a job opportunity." },
-  { id: "meeting", name: "Meeting", description: "A general discussion to share information, align on a topic, or agree on next steps." },
   { id: "job-intake", name: "Job intake", description: "A discussion to gather requirements, responsibilities, expectations, and hiring needs for a job opening." },
 ];
 
-const STORAGE_KEY = "wiggli-event-types:v2";
+const STORAGE_KEY = "wiggli-event-types:v3";
+const PREVIOUS_STORAGE_KEY = "wiggli-event-types:v2";
 const LEGACY_STORAGE_KEY = "wiggli-event-types:v1";
 const CHANGE_EVENT = "wiggli-event-types-change";
 const LEGACY_DEFAULT_IDS = new Set([
@@ -58,11 +59,23 @@ function migrateLegacyEventTypes(value: unknown): EventTypeDefinition[] {
   return normalizeEventTypes([...cloneDefaults(), ...customTypes]);
 }
 
+function migrateCurrentEventTypes(value: unknown): EventTypeDefinition[] {
+  const existing = sanitizeEventTypes(value);
+  const customTypes = existing.filter((item) => !defaultEventTypes.some((defaultType) => defaultType.id === item.id));
+  return normalizeEventTypes([...cloneDefaults(), ...customTypes]);
+}
+
 export function loadEventTypes(): EventTypeDefinition[] {
   if (typeof window === "undefined") return cloneDefaults();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) return normalizeEventTypes(JSON.parse(raw));
+    const previousRaw = window.localStorage.getItem(PREVIOUS_STORAGE_KEY);
+    if (previousRaw) {
+      const migrated = migrateCurrentEventTypes(JSON.parse(previousRaw));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
     const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!legacyRaw) return cloneDefaults();
     const migrated = migrateLegacyEventTypes(JSON.parse(legacyRaw));

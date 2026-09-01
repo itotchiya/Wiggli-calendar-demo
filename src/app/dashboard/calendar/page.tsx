@@ -16,7 +16,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { Header } from "@/components/chrome";
-import { CreatorDialog, type CreatorMode } from "@/components/creator-dialog";
 import { EventDrawer, type EventMeta, type TimedDate } from "@/components/event-drawer";
 import { EventPreviewDialog } from "@/components/event-preview";
 import type { CalendarEventItem, PreviewStatus } from "@/lib/calendar-types";
@@ -345,9 +344,7 @@ export default function CalendarPage() {
   const persistenceReady = useRef(false);
   const [selectedDate, setSelectedDate] = useState(getTodayUtcPlusTwo);
   const [slot, setSlot] = useState(getNextQuarterSlot);
-  const [chooserOpen, setChooserOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [creatorMode, setCreatorMode] = useState<CreatorMode>("smart");
   const [rescheduleTarget, setRescheduleTarget] = useState<{ event: CalendarEventItem; proposed: { attendeeEmail: string; slotLabel: string; note: string | null } | null; isEdit: boolean; initialStep?: 1 | 2 } | null>(null);
   const [previewEvent, setPreviewEvent] = useState<CalendarEventItem | null>(null);
   const [bannerVisible, setBannerVisible] = useState(true);
@@ -398,11 +395,6 @@ export default function CalendarPage() {
   }, [loadEvents]);
   const openCreator = (date?: string, hour?: number, minute?: number) => {
     setSlot(date !== undefined && hour !== undefined && minute !== undefined ? { date, hour, minute } : getNextQuarterSlot());
-    setChooserOpen(true);
-  };
-  const chooseCreator = (mode: CreatorMode) => {
-    setChooserOpen(false);
-    setCreatorMode(mode);
     setDrawerOpen(true);
   };
   const syncEvent = async (event: CalendarEventItem) => {
@@ -458,7 +450,6 @@ export default function CalendarPage() {
         <CalendarPanel onSchedule={() => openCreator()} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
         <MainCalendar events={[...events, ...draftEvents]} selectedDate={selectedDate} onSelectDate={setSelectedDate} onSlot={openCreator} onEventClick={setPreviewEvent} onSync={() => void syncCalendar()} syncing={syncing} syncAvailable={Boolean(session?.accessToken)} />
       </div>
-      <CreatorDialog open={chooserOpen} onClose={() => setChooserOpen(false)} onSelect={chooseCreator} />
       {/* Reschedule drawer — reuses EventDrawer in reschedule mode */}
       {rescheduleTarget && (() => {
         const ev = rescheduleTarget.event;
@@ -537,7 +528,7 @@ export default function CalendarPage() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         slot={slot}
-        mode={creatorMode}
+        mode="smart"
         onCreate={(title, occurrences, meta) => {
           setDrawerOpen(false);
           if (meta?.status === "DRAFT" || meta?.status === "LOGGED") {
