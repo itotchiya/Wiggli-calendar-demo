@@ -1023,7 +1023,7 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
                 <button type="button" role="menuitem" onClick={() => { setProviderChoice("manual"); setProviderMenuOpen(false); }} style={{ fontSize: 13 }}><span style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}><Link2 size={16} />Manual URL</span>{provider === "manual" && <Check size={14} />}</button>
               </div>}
             </div>
-            {provider === "teams" ? <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "11px 12px", border: "1px solid #fde7b0", borderRadius: 9, background: "#fffbeb", color: "#a15c00" }}><AlertTriangle size={22} style={{ flex: "none" }} /><div style={{ fontSize: 13, lineHeight: 1.35 }}>Connect your Outlook Calendar to generate a Microsoft Teams link.<br /><button type="button" className="field-error-action" style={{ color: "#9a5900", marginTop: 3 }}>Connect now</button></div></div> : provider === "google" ? null : provider === "manual" ? <>
+            {provider === "teams" || provider === "google" ? null : provider === "manual" ? <>
               <label className="field-label" style={{ fontSize: 13, marginTop: 12, marginBottom: 0 }}>Meeting link<span className="required-star">*</span></label>
               <input className="drawer-title-input" value={manualUrl} onChange={(event) => setManualUrl(event.target.value)} placeholder="Add meeting link" aria-label="Add meeting link" style={{ height: 39, fontSize: 13 }} />
             </> : <>
