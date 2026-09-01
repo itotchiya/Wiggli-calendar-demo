@@ -32,10 +32,10 @@ export function buildSmartSlotNoticeHtml(document: SmartEventDocument): string {
     )
     .join("");
   return [
-    `<div data-smart-block="multi-slot-note" style="margin:14px 0;padding:10px 14px;border-left:3px solid #0f9d76;background:#f2faf7;font-size:13px;line-height:1.5;">`,
-    `<p style="margin:0 0 4px;font-weight:600;color:#1a1a1a;">You will receive ${document.event.slots.length} calendar invitations — one for each proposed slot:</p>`,
-    `<ul>${options}</ul>`,
-    `<p style="margin:6px 0 0;"><strong>Please reply <span style="color:#0f7a5f;">Yes</span> only to the slot that suits you, and No to all others.</strong> Your answers let us pick the time that works for everyone — we'll confirm the final slot by email.</p>`,
+    `<div data-smart-block="multi-slot-note" style="margin:16px 0;font-size:13px;line-height:1.6;color:#334155;">`,
+    `<p style="margin:0 0 6px;font-weight:600;color:#1e293b;">You will receive ${document.event.slots.length} calendar invitations — one for each proposed slot:</p>`,
+    `<ul style="margin:0 0 8px;padding-left:18px;">${options}</ul>`,
+    `<p style="margin:6px 0 0;">Please reply <strong>Yes</strong> only to the slot that suits you, and <strong>No</strong> to all others. Your answers let us pick the time that works for you.</p>`,
     `</div>`,
   ].join("");
 }
@@ -82,7 +82,7 @@ export function slotNoticeText(slots: SmartEventSlot[], activeIndex: number): st
   ].join("\n");
 }
 
-const DEFAULT_SMART_SIGNATURE_HTML = [
+export const DEFAULT_SMART_SIGNATURE_HTML = [
   "<p>Best regards,</p>",
   "<p><strong>Mustapha Boufous</strong><br/>",
   '<a href="tel:+212636857897">+212636857897</a><br/>',
@@ -100,6 +100,10 @@ export function buildSmartInvitationHtml(
     : "";
   const where = whereLine(document) ?? "";
   const slotNotice = buildSmartSlotNoticeHtml(document);
+  // Only one supporting text at the bottom: multi-slot uses slotNotice's wording, single uses rsvp-note
+  const rsvpNote = slotNotice
+    ? ""
+    : `<div data-smart-block="rsvp-note"><p>Please reply with <strong>Yes</strong>, <strong>Maybe</strong>, or <strong>No</strong> to confirm your attendance. Your response will be recorded automatically.</p></div>`;
   return [
     `<div data-smart-block="greeting"><p>Hello ${greetingVariable(audience)},</p></div>`,
     `<div data-smart-block="ai-context"><p>${escapeHtml(contextParagraph)}</p></div>`,
@@ -115,8 +119,7 @@ export function buildSmartInvitationHtml(
     `</ul>`,
     `</div>`,
     slotNotice,
-    `<div data-smart-block="rsvp-note"><p>Please respond with Yes, Maybe or No from the calendar invitation. Your response will be synchronized automatically.</p></div>`,
-    `<div data-smart-block="signature">${DEFAULT_SMART_SIGNATURE_HTML}</div>`,
+    rsvpNote,
   ].join("");
 }
 

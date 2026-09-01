@@ -20,16 +20,22 @@ Return valid JSON only in this shape:
 
 Generate only keys requested in audiences.
 
+TONE — mirror Wiggli legacy interview emails (interview_email.html, interview_confirmation_email.html):
+- Concise, professional, transactional, courteous. British English (organise).
+- Direct, factual, action-oriented — no marketing fluff (no excited, delighted, thrilled, looking forward).
+- Formal, neutral. No adjectives about culture or enthusiasm.
+
 STRICT SCOPE:
 - Write exactly one plain-text paragraph per audience.
-- Write 2 or 3 natural sentences.
-- Target 45-75 words and never exceed 90 words.
-- Event type and linked records are the primary logic.
-- Title and description are supporting context. Use useful attendee-facing meaning from them, such as interview stage, technical focus, or salary expectations.
-- The attendance.actualAttendees list is the only source of who will participate in the event.
-- A linked record with attendanceStatus or status "context_only" provides subject context only. Never describe that person or entity as attending, joining, meeting, interviewing, or being present.
-- Only describe a linked person as participating when the same linked record is marked "attending".
-- Use attendee types to understand the meeting composition. If only internal attendees are present, frame it as an internal discussion even when candidates or contacts are linked as context.
+- Write 1 or 2 sentences only.
+- Target 20-35 words and never exceed 45 words.
+- Infer the event's purpose from the JSON: event.type + title + description + linked records + attendee composition. Derive a natural reason (e.g. job intake with Job+Contact → gathering requirements for that role to discuss with the client contact; only internals → internal alignment).
+- Use attendee composition as primary signal: if actualAttendees contains only "internal", frame the paragraph as an internal discussion/alignment/session — even when a Job, Contact, Organization or Opportunity is linked. Do not describe external linked records as attending.
+- The inviter is ALWAYS the organizer. Never make a [Linked.*] variable the grammatical subject of "has invited you / has requested / has scheduled". Linked records are always objects of "regarding / concerning / to discuss / for" — e.g. "regarding [Linked.Job] at [Linked.Organization]" or "to discuss the requirements for [Linked.Job] with [Linked.Contact]". WRONG: "[Linked.Contact] has invited you to a job intake" — CORRECT: "You are invited to a job intake session to discuss the requirements and expectations for [Linked.Job]".
+- Title and description are supporting context only. Use useful attendee-facing meaning from them, such as interview stage, technical focus, or salary expectations, but do not repeat them verbatim.
+- The attendance.actualAttendees list is the only source of who will participate. AttendanceStatus "context_only" means the linked record is a topic to be discussed, not a participant — mention it only with "regarding / concerning / to discuss / for the role of [Linked.Job]".
+- Only use "with [Linked.*]" when that linked record's attendanceStatus is "attending" (the same person is also in actualAttendees). Otherwise use "regarding" or "concerning".
+- Use attendee types to understand composition. If only internal attendees are present, use phrasing like "internal session", "internal discussion", "alignment on [Linked.Job]" — never "with [Linked.Contact]" as if they will join.
 - Do not list or name attendees in the paragraph; the deterministic event details already show the guest list.
 - Do not copy the complete title or description and do not output [Event.Title] or [Event.Description].
 - Use only [Linked.*] variables listed in that audience's allowedContextVariables.
@@ -39,7 +45,7 @@ STRICT SCOPE:
 - Never mention the recipient's own linked entity as another person.
 - Do not invent people, jobs, organizations, opportunities, stages, locations, dates, times, URLs, or facts.
 - Do not write a greeting, subject, details list, RSVP note, signature, markdown, HTML, or line breaks.
-- Keep the writing formal, warm, clear, and specific without sounding verbose.`;
+- End with a brief call to action like "Please review the details below and confirm your availability." when natural — do not add it if the paragraph is already at the word limit.`;
 }
 
 export function buildSmartContextPromptPayload(document: SmartEventDocument) {

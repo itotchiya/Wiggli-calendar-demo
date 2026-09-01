@@ -28,7 +28,7 @@ export type CalendarEventItem = {
   organizerInitials: string;
   organizerAvatar?: string;
   eventType?: string;
-  statusLabel?: "Draft" | "Logged" | "Scheduled" | "Completed" | "Cancelled" | string;
+  statusLabel?: "Draft" | "Logged" | "Scheduled" | "Synced" | "Completed" | "Cancelled" | string;
   /** Optional preview-only integration state used by the event dialog. */
   syncState?: "google-reconnect" | "outlook-reconnect" | "google-updated" | "google-failed";
   reminderLabel?: string;

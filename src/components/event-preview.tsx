@@ -342,10 +342,10 @@ export function EventPreviewDialog({
             <span className="preview-meta-label"><UserRound size={16} /> Organizer</span>
             <span className="preview-organizer"><PreviewOrganizerAvatar name={event.organizerName} initials={event.organizerInitials} avatar={event.organizerAvatar} />{event.organizerName}</span>
           </div>
-          {!isGoogleEvent && <div className="preview-meta">
+          <div className="preview-meta">
             <span className="preview-meta-label"><CalendarDays size={16} /> Status <span className="preview-info-icon" title="Live event status"><Info size={12} /></span></span>
             <span className={`preview-status-pill ${isCancelled ? "cancelled" : statusClassName}`}>{event.statusLabel ?? "Scheduled"}</span>
-          </div>}
+          </div>
         </div>
 
         <div className="preview-meta-grid">

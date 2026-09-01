@@ -101,6 +101,7 @@ function mapEvent(event: EventDto, completedIds?: Set<string>, currentOrganizer?
     eventType: event.eventType ?? (event.summary.toLowerCase().includes("interview") ? "Interview" : "Meeting"),
     statusLabel: (event as { status?: string }).status === "CANCELLED"
       ? "Cancelled"
+      : source === "GOOGLE" ? "Synced"
       : completedIds?.has(event.id) ? "Completed" : "Scheduled",
     syncState: (event as { syncState?: CalendarEventItem["syncState"] }).syncState,
     proposals: (event.proposals ?? []).filter((p) => p.status === "PENDING").map((p) => ({

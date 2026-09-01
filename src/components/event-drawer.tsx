@@ -37,6 +37,8 @@ import {
   UsersRound,
   Video,
   X,
+  Save,
+  ListTree
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -79,6 +81,19 @@ type Organization = { id: string; name: string; initials: string; relationship: 
 export type LinkedContext = { id: string; kind: "job" | "opportunity"; title: string; contract: "Permanent" | "Temporary"; organizationId: string; organization: string; organizationInitials: string };
 type AttendeeSchedule = { status: "Busy" | "Out of Office" | "Awaiting response" | "Confirmed"; date: string; time?: string };
 export type AttendeePerson = { id: string; name: string; email: string; type: AttendeeType; avatar: string; links?: LinkedContext[]; organizations?: string[]; schedules?: AttendeeSchedule[]; locked?: boolean };
+
+function multipleDateError(slotCount: number, attendees: AttendeePerson[]): string | null {
+  if (slotCount <= 1) return null;
+
+  const candidateCount = attendees.filter((person) => person.type === "candidate" || person.type === "freelancer").length;
+  const hasContact = attendees.some((person) => person.type === "contact");
+  const hasInternal = attendees.some((person) => person.type === "internal");
+
+  if (candidateCount > 1) return "Multiple slots are only available for one candidate.";
+  if (hasContact && (candidateCount > 0 || hasInternal)) return "Multiple attendee types cannot use multiple dates.";
+  if (candidateCount === 0) return "Multiple slots are only available for candidates.";
+  return null;
+}
 
 const organizations: Record<string, Organization> = {
   gm: { id: "gm", name: "General Motors", initials: "GM", relationship: "Holding" },
@@ -247,7 +262,7 @@ function DrawerTimeField({ value, label, min = "00:00", max = "23:45", onChange 
   return <span className="drawer-time-select"><select className="drawer-time-field" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>{choices.map((time) => <option value={time} key={time}>{time}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></span>;
 }
 
-function MultipleDatePicker({ value, minDate, onChange }: { value: TimedDate[]; minDate: string; onChange: (value: TimedDate[]) => void }) {
+function MultipleDatePicker({ value, minDate, onChange, getMultipleDateError, onMultipleDateError }: { value: TimedDate[]; minDate: string; onChange: (value: TimedDate[]) => void; getMultipleDateError?: (slotCount: number) => string | null; onMultipleDateError?: (message: string) => void }) {
   const [visibleMonth, setVisibleMonth] = useState(() => parseDateKey(value[0]?.date || minDate));
   const [activeDate, setActiveDate] = useState(value[0]?.date || minDate);
   const days = useMemo(() => {
@@ -280,6 +295,11 @@ function MultipleDatePicker({ value, minDate, onChange }: { value: TimedDate[]; 
   };
 
   const addSlot = (date: string) => {
+    const error = getMultipleDateError?.(sortedSlots.length + 1);
+    if (error) {
+      onMultipleDateError?.(error);
+      return;
+    }
     const existing = sortedSlots.filter((slot) => slot.date === date);
     const template = existing.at(-1) ?? sortedSlots[0];
     const start = template ? minutesToTime(timeToMinutes(template.end) + 15) : minimumTimeForDate(date);
@@ -296,6 +316,11 @@ function MultipleDatePicker({ value, minDate, onChange }: { value: TimedDate[]; 
       const next = sortedSlots.filter((slot) => slot.date !== date);
       onChange(next);
       setActiveDate(next[0]?.date || minDate);
+      return;
+    }
+    const error = getMultipleDateError?.(sortedSlots.length + 1);
+    if (error) {
+      onMultipleDateError?.(error);
       return;
     }
     const template = sortedSlots[0];
@@ -1212,6 +1237,7 @@ export function EventDrawer({
   const [locationError, setLocationError] = useState(false);
   const [locationValid, setLocationValid] = useState(true);
   const [dateError, setDateError] = useState(false);
+  const [multipleDateAttemptError, setMultipleDateAttemptError] = useState<string | null>(null);
   const [linkedToError, setLinkedToError] = useState(false);
   const [description, setDescription] = useState("");
   const [selectedEventType, setEventType] = useState(fixedEventType ?? editingEvent?.eventType ?? configuredEventTypeNames[0] ?? "Meeting");
@@ -1231,6 +1257,9 @@ export function EventDrawer({
     contact: "Invitation: [Event.Title]",
     internal: "Invitation: [Event.Title]",
   };
+  // Keep subject in sync with the title the user typed (editable), so the subject field shows the real title, not the variable.
+  // Only overwrites subjects that still contain the placeholder or are still the default.
+  const subjectFromTitle = title.trim() ? `Invitation: ${title.trim()}` : "Invitation: [Event.Title]";
 
   const defaultEmailBodies: Record<"candidate" | "contact" | "internal", string> = {
     candidate: "",
@@ -1239,6 +1268,34 @@ export function EventDrawer({
   };
 
   const [emailSubjects, setEmailSubjects] = useState(defaultEmailSubjects);
+  const subjectTouchedRef = useRef(false);
+  // Sync subject to the exact title the user typed (until they manually edit subject).
+  // Shows full event title, not just first letter, and keeps it editable.
+  useEffect(() => {
+    if (subjectTouchedRef.current) return;
+    if (!title.trim()) {
+      setEmailSubjects(defaultEmailSubjects);
+      return;
+    }
+    const resolved = `Invitation: ${title.trim()}`;
+    setEmailSubjects((prev) => {
+      // If subject was auto-derived (placeholder or previous resolved), keep in sync
+      const isAuto = (v: string) => v.includes("[Event.Title]") || v.startsWith("Invitation: ");
+      // Only auto-update if not manually touched; check each tab
+      let changed = false;
+      const next = { ...prev };
+      (["candidate", "contact", "internal"] as const).forEach((k) => {
+        if (isAuto(next[k])) {
+          // If subject is auto, update to current full title; prevents truncation to first letter
+          if (next[k] !== resolved) {
+            next[k] = resolved;
+            changed = true;
+          }
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [title]);
   const [emailBodies, setEmailBodies] = useState(defaultEmailBodies);
   const [smartDocument, setSmartDocument] = useState<SmartEventDocument | null>(null);
   // AI drafting state
@@ -1258,6 +1315,8 @@ export function EventDrawer({
   const dateMissing = occurrences.length === 0 || occurrences.some((occurrence) => !occurrence.date || !occurrence.start || !occurrence.end);
   const isEditMode = Boolean(isEdit && editingEvent);
   const isRescheduleSameDate = Boolean(rescheduleDate && !isEditMode && occurrences.some((occurrence) => occurrence.date === rescheduleDate));
+  const multipleDateAttendeeError = multipleDateError(occurrences.length, selectedAttendees);
+  const visibleMultipleDateError = multipleDateAttendeeError ?? multipleDateAttemptError;
 
   useEffect(() => {
     if (fixedContext) {
@@ -1274,6 +1333,10 @@ export function EventDrawer({
   useEffect(() => {
     if (!dateMissing && !isRescheduleSameDate) setDateError(false);
   }, [dateMissing, isRescheduleSameDate]);
+
+  useEffect(() => {
+    setMultipleDateAttemptError(null);
+  }, [selectedAttendees]);
 
   useEffect(() => {
     if (open && rescheduleDate && startDate === rescheduleDate && !isEditMode) setDateError(true);
@@ -1515,8 +1578,8 @@ export function EventDrawer({
   const getOccurrences = (): TimedDate[] =>
     [...occurrences].sort((a, b) => dateTimeStamp(a.date, a.start) - dateTimeStamp(b.date, b.start));
 
-   const validateEvent = () => {
-    const problems = { title: !title.trim(), date: dateMissing || isRescheduleSameDate, organization: false, context: false, location: false, eventType: false, linkedTo: false };
+  const validateEvent = () => {
+    const problems = { title: !title.trim(), date: dateMissing || isRescheduleSameDate, organization: false, context: false, location: false, eventType: false, linkedTo: false, multipleDateAttendees: Boolean(multipleDateAttendeeError) };
     problems.eventType = !eventType.trim();
     problems.location = hasInvitees && (!locationOpen || !locationValid);
     setError(problems.title);
@@ -1526,7 +1589,7 @@ export function EventDrawer({
     setLocationError(problems.location);
     setEventTypeError(problems.eventType);
     setLinkedToError(problems.linkedTo);
-    const hasError = problems.title || problems.date || problems.organization || problems.context || problems.location || problems.eventType || problems.linkedTo;
+    const hasError = problems.title || problems.date || problems.organization || problems.context || problems.location || problems.eventType || problems.linkedTo || problems.multipleDateAttendees;
     if (hasError) {
       window.setTimeout(() => {
         const body = document.querySelector(".event-drawer.open .drawer-body") as HTMLElement | null;
@@ -1669,7 +1732,7 @@ export function EventDrawer({
       setSmartDocument(document);
       // Minimum "thinking" window so the generating glow reads as AI work,
       // even when the API answers instantly.
-      const minDuration = new Promise((resolve) => setTimeout(resolve, 2200));
+      const minDuration = new Promise((resolve) => setTimeout(resolve, 700));
       const res = await fetch("/api/invite-draft", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1692,7 +1755,11 @@ export function EventDrawer({
         }
         return next;
       });
-      if (rebuild) setEmailSubjects(defaultEmailSubjects);
+      if (rebuild) {
+        const subjectTitle = document.event.title?.trim() || title.trim() || "Event";
+        const resolvedSubject = `Invitation: ${subjectTitle}`;
+        setEmailSubjects({ candidate: resolvedSubject, contact: resolvedSubject, internal: resolvedSubject });
+      }
       setDraftedOnce(true);
       showToast(
         body.source === "fallback"
@@ -1868,6 +1935,10 @@ export function EventDrawer({
     }
     if (dateMissing) {
       setDateError(true);
+      return;
+    }
+    if (multipleDateAttendeeError) {
+      setMultipleDateAttemptError(multipleDateAttendeeError);
       return;
     }
     onCreate(title.trim(), getOccurrences(), { ...buildMeta(), status: "DRAFT" });
@@ -2099,15 +2170,12 @@ export function EventDrawer({
                    key={open ? `date-time-${slot.date}-${slot.hour}-${slot.minute}` : "date-time-closed"}
                    value={occurrences}
                    minDate={rescheduleDate && editingEvent ? "2020-01-01" : todayKey}
-                   onChange={setOccurrences}
+                   onChange={(next) => { setOccurrences(next); setMultipleDateAttemptError(null); }}
+                   getMultipleDateError={(slotCount) => multipleDateError(slotCount, selectedAttendees)}
+                   onMultipleDateError={setMultipleDateAttemptError}
                  />
-                 {occurrences.length > 1 && !(rescheduleDate && editingEvent) && (
-                   <div className="date-time-support" aria-live="polite">
-                     <strong>{occurrences.length} time slots</strong> will be sent as separate invitations so attendees can choose the time that works best.
-                   </div>
-                 )}
-
                  {dateError && <p className="field-error"><FieldErrorIcon /> {isRescheduleSameDate ? "Please choose a different date to reschedule" : "Select a date"}</p>}
+                 {visibleMultipleDateError && <p className="field-error"><FieldErrorIcon /> {visibleMultipleDateError}</p>}
 
                 <section className="related-to-section">
                   <div className="field-label field-space location-heading"><span>Linked to</span></div>
@@ -2243,7 +2311,7 @@ export function EventDrawer({
                 </div>
               </div>
 
-              {availableInviteTabs.length > 1 && (
+              {availableInviteTabs.length >= 1 && (
                 <div className="invite-tabs">
                   {availableInviteTabs.map((tab) => (
                     <button
@@ -2279,26 +2347,37 @@ export function EventDrawer({
                       type="text"
                       className="invite-subject-input"
                       value={emailSubjects[activeInviteTab]}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        subjectTouchedRef.current = true;
                         setEmailSubjects((prev) => ({
                           ...prev,
                           [activeInviteTab]: e.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                     />
                   </div>
 
-                  {/* AI toolbar */}
-                  <div className="invite-toolbar">
+                  {/* AI toolbar — matches new design: Rewrite invitation + Save template + Templates + Placeholders */}
+                  <div className="invite-toolbar" style={{ justifyContent: "flex-end", flexWrap: "wrap", gap: 8, padding: "6px 0 8px", borderBottom: "1px solid #f1f5f9" }}>
                     <button
                       type="button"
                       className={`ai-neon-btn ${aiBusy ? "busy" : ""}`}
                       onClick={() => void generateDrafts()}
                       disabled={aiBusy || !title.trim()}
-                      title={!title.trim() ? "Add a title first" : "Rewrite the introduction while keeping the event details intact"}
+                      title={!title.trim() ? "Add a title first" : "Rewrite the invitation while keeping the event details intact"}
+                      style={{ borderColor: "#86efac", background: aiBusy ? "#f0fdf4" : "#fff", color: "#0f9d76", fontWeight: 600 }}
                     >
                       {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <PenLine size={14} />}
-                      {aiBusy ? "Writing…" : draftedOnce ? "Rewrite introduction" : "Write introduction"}
+                      {aiBusy ? "Writing…" : draftedOnce ? "Rewrite invitation" : "Write invitation"}
+                    </button>
+                    <button type="button" className="toolbar-btn" style={{ background: "#e6f7f5", borderColor: "#c7ece6", color: "#0f7a6e", fontWeight: 600 }} onClick={() => showToast("Template saved")}>
+                      <Save size={14} /> Save template
+                    </button>
+                    <button type="button" className="toolbar-btn" onClick={() => setSidePanel((v) => v === "templates" ? null : "templates")}>
+                      <ListTree size={14} /> Templates <ChevronRight size={14} />
+                    </button>
+                    <button type="button" className="toolbar-btn" onClick={() => setSidePanel((v) => v === "placeholders" ? null : "placeholders")}>
+                      <span style={{ fontWeight: 700 }}>[Placeholders]</span> <ChevronRight size={14} />
                     </button>
                   </div>
 
@@ -2306,7 +2385,7 @@ export function EventDrawer({
                     <p className="field-error" role="alert"><FieldErrorIcon /> {aiError}</p>
                   )}
 
-                  {/* Email Body Editor (Gmail-compose style, atomic var chips) */}
+                  {/* Email Body Editor (Gmail-compose style, atomic var chips) — signature is OUTSIDE, not editable */}
                   <div className="invite-body-wrapper" style={{ position: "relative", background: "#fff", display: "flex", flexDirection: "column" }}>
                     <RichBodyEditor
                       value={emailBodies[activeInviteTab]}
@@ -2321,6 +2400,14 @@ export function EventDrawer({
                       generatingBlockSelector='[data-smart-block="ai-context"]'
                       generating={aiBusy}
                     />
+                  </div>
+                  {/* Signature — separated from editable body, always visible, not cleared on rewrite */}
+                  <div className="invite-signature-card" style={{ marginTop: 8 }}>
+                    <span style={{ fontSize: 13, color: "#475569" }}>Best regards,</span>
+                    <strong>Mustapha Boufous</strong>
+                    <span style={{ fontSize: 13, color: "#475569" }}>+212636857897</span>
+                    <span style={{ fontSize: 13, color: "#475569" }}>toozmust@gmail.com</span>
+                    <strong style={{ marginTop: 6 }}>The Wiggli Team</strong>
                   </div>
 
                   {/* Variables available for THIS email (from the user's inputs) */}
@@ -2345,7 +2432,36 @@ export function EventDrawer({
                   </div>
 
                 </div>
-
+                {sidePanel && (
+                  <div className="invite-side-panel">
+                    <div className="side-panel-header">
+                      <h3>{sidePanel === "templates" ? "Templates" : "Placeholders"}</h3>
+                      <button type="button" onClick={() => setSidePanel(null)}>✕</button>
+                    </div>
+                    <div className="side-panel-content">
+                      {sidePanel === "templates" ? (
+                        <>
+                          <div className="side-search-box">
+                            <input placeholder="Search templates" value={templateSearchQuery} onChange={(e) => setTemplateSearchQuery(e.target.value)} />
+                          </div>
+                          <p className="side-panel-helper">Choose a saved template to replace the current invitation.</p>
+                          <div className="template-item-list">
+                            <button type="button" className="template-card-btn" onClick={() => showToast("No saved templates yet")}>No templates yet</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="side-panel-helper">Click a placeholder to insert it at the cursor.</p>
+                          <div className="placeholder-chip-cloud">
+                            {availableVariables.map((v) => (
+                              <button key={v.tag} type="button" className="placeholder-insert-btn" onClick={() => insertIntoActiveEditor(v.tag)}>{v.tag}</button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="drawer-footer">

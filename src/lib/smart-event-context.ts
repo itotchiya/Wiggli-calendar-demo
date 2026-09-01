@@ -49,23 +49,31 @@ function linkedPhrase(document: SmartEventDocument, audience: SmartAudience): st
   ].join("");
 }
 
-/** Deterministic two-sentence fallback when AI is unavailable or invalid. */
+/** Deterministic fallback when AI is unavailable — legacy transactional tone. */
 export function fallbackContextParagraph(
   document: SmartEventDocument,
   audience: SmartAudience
 ): string {
   const eventType = document.event.type.name.toLowerCase();
-  const prefix =
-    audience === "candidate"
-      ? `You are invited to take part in a ${eventType}`
-      : audience === "contact"
-        ? `You are invited to participate in a ${eventType}`
-        : `You are invited to join a ${eventType}`;
-  const focus = contextualFocus(document);
-  const second = focus.length
-    ? `The conversation will focus on ${focus.join(", ")} and provide space to discuss the next steps.`
-    : "The conversation will provide an opportunity to cover the relevant context and align on the next steps.";
-  return `${prefix}${linkedPhrase(document, audience)}. ${second}`;
+  const phrase = linkedPhrase(document, audience);
+  // Legacy style: concise 1-2 sentences, transactional, ends with action.
+  // phrase is like " regarding [Linked.Job] at [Linked.Organization]" or " with [Linked.Contact] ..."
+  if (audience === "candidate") {
+    const base = phrase
+      ? `You have been invited to an interview${phrase}`
+      : `You have been invited to an interview for the ${eventType}`;
+    return `${base}. Please review the details below and confirm your availability.`;
+  }
+  if (audience === "contact") {
+    const base = phrase
+      ? `An interview has been scheduled${phrase}`
+      : `An interview has been scheduled for the ${eventType}`;
+    return `${base}. Please review the details below and confirm your availability.`;
+  }
+  const base = phrase
+    ? `An interview has been scheduled${phrase}`
+    : `An interview has been scheduled for the ${eventType}`;
+  return `${base}. Please review the details below.`;
 }
 
 export function fallbackContextParagraphs(document: SmartEventDocument): SmartContextParagraphs {
@@ -140,7 +148,7 @@ export function validateContextParagraphs(
     }
     const normalized = paragraph.trim().replace(/\s+/g, " ");
     const count = wordCount(normalized);
-    if (count < 20 || count > 90) throw new Error(`${audience.type} paragraph must contain 20-90 words.`);
+    if (count < 15 || count > 45) throw new Error(`${audience.type} paragraph must contain 15-45 words.`);
     if (/<[^>]+>/.test(normalized) || /\r|\n/.test(paragraph)) {
       throw new Error(`${audience.type} paragraph must be plain text.`);
     }

@@ -518,7 +518,7 @@ export async function createEventAndInvite(opts: {
       html = buildCleanEmailHtml(styled, {
         organizerEmail,
         organizerName,
-        includeSignature: !opts.smartDocument,
+        includeSignature: true,
       });
       text = resolvedPlain.trim();
        const resolvedSubject = (tpl.subject ?? subject).includes("[")
@@ -1007,7 +1007,7 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
         html = buildCleanEmailHtml(styled, {
           organizerEmail,
           organizerName,
-          includeSignature: false,
+          includeSignature: true,
         });
         text = resolvedPlain.trim();
       } else {
