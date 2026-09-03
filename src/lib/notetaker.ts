@@ -7,7 +7,7 @@ const API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL = process.env.GEMINI_NOTETAKER_MODEL ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 
 export type NotetakerAttendee = { email: string; name: string | null; type: string | null };
-export type LinkedRecord = { type: string; label: string };
+export type LinkedRecord = { type: string; label: string; details?: Record<string, unknown> };
 
 export type NotetakerContext = {
   event: { title: string; type: string; description: string | null; start: string };
@@ -66,8 +66,14 @@ export function buildContextPacket(args: {
     const root = args.previewData as { linkedTo?: unknown } | null;
     if (!root || !Array.isArray(root.linkedTo)) return [];
     return root.linkedTo
-      .filter((r): r is { type: unknown; label: unknown } => typeof r === "object" && r !== null)
-      .map((r) => ({ type: String((r as { type: unknown }).type ?? ""), label: String((r as { label: unknown }).label ?? "") }))
+      .filter((r): r is { type: unknown; label: unknown; details?: unknown } => typeof r === "object" && r !== null)
+      .map((r) => ({
+        type: String((r as { type: unknown }).type ?? ""),
+        label: String((r as { label: unknown }).label ?? ""),
+        ...(r.details && typeof r.details === "object"
+          ? { details: (r.details as Record<string, unknown>) }
+          : {}),
+      }))
       .filter((r) => r.type && r.label);
   })();
   const candidate =
@@ -93,6 +99,7 @@ Rules:
 - Every insight and action MUST quote its evidence verbatim from the transcript with a timestamp.
 - Confidence is 0-1. Omit insights you cannot evidence.
 - Use the context packet (candidate name, job, attendees, linked records) to interpret who is who; do not invent people, jobs, or facts.
+- Linked records may carry a "details" object (job description + requirements, candidate profile + skills, organization / opportunity / contact info). Treat it as ground truth: judge the candidate against the job details, and tailor insights to the organization and opportunity context.
 - Factual and neutral. NEVER make a hiring decision or recommendation — extract evidence, the human decides.
 - British English, concise. Empty arrays when nothing found — never null.`;
 }
