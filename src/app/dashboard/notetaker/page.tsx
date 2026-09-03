@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
-import { Mic, Plus, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Mic, Plus, RefreshCw, Video } from "lucide-react";
+import { Header } from "@/components/chrome";
+import { StatusChip } from "@/components/notetaker-ui";
+import { showToast } from "@/components/toaster";
 import type { EventDto } from "@/types/event";
 
 type NoteRow = {
@@ -16,19 +15,15 @@ type NoteRow = {
   source: string;
   templateUsed: string | null;
   updatedAt: string;
+  recallRecordingId: string | null;
   event: EventDto & { attendees: { email: string; name: string | null; type: string | null }[] };
   _count: { insights: number; actions: number };
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  CREATED: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
-  JOINING: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  RECORDING: "bg-red-500/15 text-red-600 dark:text-red-400",
-  TRANSCRIBED: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  PROCESSING: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  READY: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  FAILED: "bg-red-500/15 text-red-600 dark:text-red-400",
-};
+function candidateName(row: NoteRow): string {
+  const c = row.event.attendees.find((a) => a.type === "candidate");
+  return c ? (c.name ?? c.email) : "—";
+}
 
 export default function NotetakerPage() {
   const [notes, setNotes] = useState<NoteRow[] | null>(null);
@@ -43,7 +38,7 @@ export default function NotetakerPage() {
       const data = (await res.json()) as { notes: NoteRow[] };
       setNotes(data.notes);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load notes");
+      showToast(err instanceof Error ? err.message : "Failed to load notes");
       setNotes([]);
     }
   };
@@ -72,102 +67,110 @@ export default function NotetakerPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      toast.success(source === "RECALL_BOT" ? "Notetaker bot scheduled — admit it in Meet." : "Note created — paste the transcript.");
+      showToast(source === "RECALL_BOT" ? "Notetaker bot on its way — admit it in Meet." : "Note created — paste the transcript.");
       setPicking(false);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create note");
+      showToast(err instanceof Error ? err.message : "Failed to create note");
     } finally {
       setCreating(false);
     }
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <Mic size={20} /> AI Notetaker
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Test mode — mock/test meetings only. The bot joins Google Meet, records, transcribes and drafts notes.
-          </p>
+    <div className="flex h-full flex-col">
+      <Header
+        kicker={
+          <span className="inline-flex items-center gap-2">
+            <Mic size={16} /> AI Notetaker
+          </span>
+        }
+      />
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto p-4 md:p-6">
+        <div className="sync-banner" style={{ margin: 0 }}>
+          <div>
+            <Mic size={15} />
+            <span>Test mode — mock/test meetings only. The bot joins Google Meet, records, transcribes and drafts notes.</span>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => void load()}>
+              <span className="inline-flex items-center gap-1"><RefreshCw size={12} /> Refresh</span>
+            </button>
+            <button type="button" onClick={() => setPicking((v) => !v)}>
+              <span className="inline-flex items-center gap-1"><Plus size={12} /> New note</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load()}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-          <Button size="sm" onClick={() => setPicking((v) => !v)}>
-            <Plus size={14} /> New note
-          </Button>
-        </div>
-      </div>
 
-      {picking && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Attach notetaker to an event</CardTitle>
-            <CardDescription>Pick a calendar event. Bot needs a Google Meet link on the event.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {events.length === 0 && <p className="text-sm text-muted-foreground">No events found.</p>}
-            {events.slice(0, 20).map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{e.summary}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {e.eventType ?? "Meeting"} · {new Date(e.start).toLocaleString()}
-                    {e.hangoutLink ? " · Meet link" : " · no Meet link"}
-                  </p>
+        {picking && (
+          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
+            <h2 className="text-[16px] font-semibold text-[#273246]">Attach notetaker to an event</h2>
+            <p className="mt-0.5 text-[13px] text-[#718096]">Pick a calendar event. The bot needs a Google Meet link on the event.</p>
+            <div className="mt-3 flex flex-col gap-2">
+              {events.length === 0 && <p className="text-[13px] text-[#718096]">No events found.</p>}
+              {events.slice(0, 20).map((e) => (
+                <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e9edf2] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13.5px] font-semibold text-[#273246]">{e.summary}</p>
+                    <p className="text-[12px] text-[#718096]">
+                      {e.eventType ?? "Meeting"} · {new Date(e.start).toLocaleString()}
+                      {e.hangoutLink ? " · Meet link" : " · no Meet link"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" className="text-button" disabled={creating} onClick={() => void create(e.id, "MANUAL_PASTE")}>
+                      Paste transcript
+                    </button>
+                    <button type="button" className="primary-button" disabled={creating || !e.hangoutLink} onClick={() => void create(e.id, "RECALL_BOT")}>
+                      <Video size={14} /> Send bot
+                    </button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button size="sm" variant="outline" disabled={creating} onClick={() => void create(e.id, "MANUAL_PASTE")}>
-                    Paste transcript
-                  </Button>
-                  <Button size="sm" disabled={creating || !e.hangoutLink} onClick={() => void create(e.id, "RECALL_BOT")}>
-                    Send bot
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </div>
+          </section>
+        )}
 
-      <Card>
-        <CardContent className="p-0">
+        <section className="overflow-hidden rounded-xl border border-[#e9edf2] bg-white">
           {notes === null ? (
-            <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+            <p className="p-6 text-[13.5px] text-[#718096]">Loading…</p>
           ) : notes.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
+            <p className="p-6 text-[13.5px] text-[#718096]">
               No notes yet. Click “New note”, pick an event and send the bot — or paste a transcript to test the AI without a bot.
             </p>
           ) : (
-            <div className="divide-y">
+            <div className="divide-y divide-[#edf0f4]">
+              <div className="grid grid-cols-[1fr_170px_130px_110px] gap-3 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-[#a3a6aa]">
+                <span>Meeting</span><span>Candidate</span><span>Output</span><span className="text-right">Status</span>
+              </div>
               {notes.map((n) => (
-                <Link key={n.id} href={`/dashboard/notetaker/${n.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50">
+                <Link
+                  key={n.id}
+                  href={`/dashboard/notetaker/${n.id}`}
+                  className="grid grid-cols-[1fr_170px_130px_110px] items-center gap-3 px-4 py-3 transition hover:bg-[#f8fafc]"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{n.event.summary}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {n.event.eventType ?? "Meeting"} · {new Date(n.event.start).toLocaleString()}
-                      {n.templateUsed ? ` · ${n.templateUsed} template` : ""}
-                      {n.statusMessage ? ` · ${n.statusMessage}` : ""}
+                    <p className="truncate text-[13.5px] font-semibold text-[#273246]">
+                      {n.recallRecordingId ? <Video size={13} className="mr-1 inline text-[#058d80]" /> : null}
+                      {n.event.summary}
                     </p>
+                    <p className="truncate text-[12px] text-[#718096]">
+                      {n.event.eventType ?? "Meeting"} · {new Date(n.event.start).toLocaleString()}
+                      {n.templateUsed ? ` · ${n.templateUsed}` : ""}
+                    </p>
+                    {n.statusMessage && <p className="truncate text-[12px] text-[#e5a92f]">{n.statusMessage}</p>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {n._count.insights > 0 && (
-                      <span className="text-xs text-muted-foreground">{n._count.insights} insights · {n._count.actions} actions</span>
-                    )}
-                    <Badge variant="secondary" className={STATUS_BADGE[n.status] ?? STATUS_BADGE.CREATED}>
-                      {n.status}
-                    </Badge>
-                  </div>
+                  <span className="truncate text-[13px] text-[#273246]">{candidateName(n)}</span>
+                  <span className="text-[12.5px] text-[#718096]">
+                    {n._count.insights > 0 ? `${n._count.insights} insights · ${n._count.actions} actions` : "—"}
+                  </span>
+                  <span className="text-right"><StatusChip status={n.status} /></span>
                 </Link>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </section>
+      </div>
     </div>
   );
 }

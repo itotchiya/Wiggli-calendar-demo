@@ -160,3 +160,15 @@ export function verifyRecallRequest(args: { secret: string; headers: Headers; ra
   }
   throw new Error("Recall signature mismatch.");
 }
+
+/** Fresh mixed-video playback URL (signed, ~5h expiry — fetch per view, never cache). */
+export async function getRecordingVideoUrl(recordingId: string): Promise<string> {
+  const response = await recallFetch(`/api/v1/recording/${recordingId}/`);
+  if (!response.ok) throw new Error(`Recall get recording failed (${response.status}).`);
+  const data = (await response.json()) as {
+    media_shortcuts?: { video_mixed?: { data?: { download_url?: string } } };
+  };
+  const url = data.media_shortcuts?.video_mixed?.data?.download_url;
+  if (!url) throw new Error("Recording has no playable video yet.");
+  return url;
+}
