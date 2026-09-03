@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/chrome";
 import { showToast } from "@/components/toaster";
+import styles from "./notetaker.module.css";
 import type { EventDto } from "@/types/event";
 
 type NoteRow = {
@@ -168,14 +169,14 @@ export default function NotetakerPage() {
                   <button
                     type="button"
                     onClick={() => setPickerOpen(true)}
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[#3DFFA2] px-4 text-[13.5px] font-bold text-[#0b2e23] transition hover:brightness-110"
+                    className={`inline-flex h-10 items-center gap-2 rounded-full bg-[#3DFFA2] px-4 text-[13.5px] font-bold text-[#0b2e23] transition hover:brightness-110 ${styles.btnDeepGreen}`}
                   >
                     <CalendarPlus size={16} /> New note
                   </button>
                   <button
                     type="button"
                     onClick={() => { setTestOpen(true); setTestResult(null); }}
-                    className="inline-flex h-10 items-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 text-[13.5px] font-semibold text-white transition hover:bg-white/15"
+                    className={`inline-flex h-10 items-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 text-[13.5px] font-semibold text-white transition hover:bg-white/15 ${styles.btnWhite}`}
                   >
                     <Bot size={16} /> Test join
                   </button>
@@ -221,7 +222,7 @@ export default function NotetakerPage() {
                   type="button"
                   onClick={() => setFilter(f)}
                   className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition ${
-                    filter === f ? "bg-[#242e45] text-white shadow" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    filter === f ? styles.tabActive : styles.tabInactive
                   }`}
                 >
                   {f}
@@ -258,7 +259,7 @@ export default function NotetakerPage() {
                 <button
                   type="button"
                   onClick={() => setPickerOpen(true)}
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#242e45] px-4 text-[13.5px] font-semibold text-white transition hover:bg-teal-700"
+                  className={`inline-flex h-10 items-center gap-2 rounded-full bg-[#242e45] px-4 text-[13.5px] font-semibold text-white transition hover:bg-teal-700 ${styles.btnWhite}`}
                 >
                   <CalendarPlus size={16} /> New note
                 </button>

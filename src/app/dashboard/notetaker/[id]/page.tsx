@@ -9,6 +9,7 @@ import {
 import { Header } from "@/components/chrome";
 import { StatusChip, timestampToSeconds } from "@/components/notetaker-ui";
 import { showToast } from "@/components/toaster";
+import styles from "../notetaker.module.css";
 
 type Insight = {
   id: string; field: string; value: string; confidence: number | null;
@@ -128,7 +129,7 @@ function ChatPanel({ messages, thinking, onSend, disabledHint }: {
                   type="button"
                   disabled={!!disabledHint}
                   onClick={() => onSend(s)}
-                  className="rounded-full border border-[#e1e6ec] bg-white px-3 py-1.5 text-[12px] font-medium text-[#273246] transition hover:border-[#058d80] hover:text-[#058d80] disabled:opacity-50"
+                  className={`rounded-full border border-[#e1e6ec] bg-white px-3 py-1.5 text-[12px] font-medium text-[#273246] transition hover:border-[#058d80] hover:text-[#058d80] disabled:opacity-50 ${styles.chipBtn}`}
                 >
                   {s}
                 </button>
@@ -182,7 +183,7 @@ function ChatPanel({ messages, thinking, onSend, disabledHint }: {
               onClick={send}
               disabled={!draft.trim() || thinking}
               aria-label="Send"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#058d80] text-white transition hover:bg-[#047a6e] disabled:opacity-30"
+              className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#058d80] text-white transition hover:bg-[#047a6e] disabled:opacity-30 ${styles.btnWhite}`}
             >
               <ArrowUp size={16} />
             </button>
@@ -373,7 +374,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                       e.stopPropagation();
                       seek(l.time);
                     }}
-                    className="inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2 py-0.5 text-[11px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white"
+                    className={`inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2 py-0.5 text-[11px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white ${styles.timePill}`}
                   >
                     <CirclePlay size={11} /> {l.time}
                   </button>
@@ -414,17 +415,17 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           )}
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             {ins.timestamp && (
-              <button type="button" onClick={() => seek(ins.timestamp!)} className="inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2.5 py-1 text-[11.5px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white">
+              <button type="button" onClick={() => seek(ins.timestamp!)} className={`inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2.5 py-1 text-[11.5px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white ${styles.timePill}`}>
                 <CirclePlay size={12} /> {ins.timestamp}
               </button>
             )}
             <span className="flex-1" />
             {ins.reviewStatus === "PENDING" ? (
               <>
-                <button type="button" onClick={() => void review("insights", ins.id, "ACCEPTED")} className="inline-flex items-center gap-1 rounded-full bg-[#273246] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:bg-[#058d80]">
+                <button type="button" onClick={() => void review("insights", ins.id, "ACCEPTED")} className={`inline-flex items-center gap-1 rounded-full bg-[#273246] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:bg-[#058d80] ${styles.acceptPill}`}>
                   <Check size={12} /> Accept
                 </button>
-                <button type="button" onClick={() => void review("insights", ins.id, "IGNORED")} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-medium text-[#718096] transition hover:bg-[#f1f5f9]">
+                <button type="button" onClick={() => void review("insights", ins.id, "IGNORED")} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-medium text-[#718096] transition hover:bg-[#f1f5f9] ${styles.btnMuted}`}>
                   <X size={12} /> Ignore
                 </button>
               </>
@@ -450,7 +451,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               {a.owner && <span className="rounded-full bg-[#eef2f6] px-2 py-0.5 text-[11px] font-semibold text-[#5f6c81]">{a.owner}</span>}
               {a.dueDate && <span className="rounded-full bg-[#fff7e6] px-2 py-0.5 text-[11px] font-semibold text-[#b97f0f]">{a.dueDate}</span>}
               {a.timestamp && (
-                <button type="button" onClick={() => seek(a.timestamp!)} className="inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2 py-0.5 text-[11px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white">
+                <button type="button" onClick={() => seek(a.timestamp!)} className={`inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2 py-0.5 text-[11px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white ${styles.timePill}`}>
                   <CirclePlay size={11} /> {a.timestamp}
                 </button>
               )}
@@ -465,10 +466,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <span className="flex-1" />
             {a.reviewStatus === "PENDING" ? (
               <>
-                <button type="button" onClick={() => void review("actions", a.id, "CREATED_TASK")} className="inline-flex items-center gap-1 rounded-full bg-[#273246] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:bg-[#058d80]">
+                <button type="button" onClick={() => void review("actions", a.id, "CREATED_TASK")} className={`inline-flex items-center gap-1 rounded-full bg-[#273246] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:bg-[#058d80] ${styles.acceptPill}`}>
                   <Check size={12} /> Create task
                 </button>
-                <button type="button" onClick={() => void review("actions", a.id, "IGNORED")} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-medium text-[#718096] transition hover:bg-[#f1f5f9]">
+                <button type="button" onClick={() => void review("actions", a.id, "IGNORED")} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-medium text-[#718096] transition hover:bg-[#f1f5f9] ${styles.btnMuted}`}>
                   <X size={12} /> Ignore
                 </button>
               </>
@@ -538,7 +539,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 type="button"
                 disabled={retrying}
                 onClick={() => void retrySync()}
-                className="inline-flex h-9 items-center rounded-full bg-[#3DFFA2] px-3.5 text-[12.5px] font-bold text-[#0b2e23] transition hover:brightness-110 disabled:opacity-50"
+                className={`inline-flex h-9 items-center rounded-full bg-[#3DFFA2] px-3.5 text-[12.5px] font-bold text-[#0b2e23] transition hover:brightness-110 disabled:opacity-50 ${styles.btnDeepGreen}`}
               >
                 {retrying ? "Recovering…" : "Retry from Recall"}
               </button>
@@ -548,7 +549,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 type="button"
                 disabled={busy}
                 onClick={() => void reanalyze()}
-                className="inline-flex h-9 items-center rounded-full border border-white/25 bg-white/5 px-3.5 text-[12.5px] font-semibold text-white transition hover:bg-white/15 disabled:opacity-50"
+                className={`inline-flex h-9 items-center rounded-full border border-white/25 bg-white/5 px-3.5 text-[12.5px] font-semibold text-white transition hover:bg-white/15 disabled:opacity-50 ${styles.btnWhite}`}
               >
                 Re-analyze
               </button>
@@ -564,7 +565,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               type="button"
               onClick={() => setTab(t)}
               className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
-                tab === t ? "bg-[#273246] text-white shadow-sm" : "text-[#718096] hover:text-[#273246]"
+                tab === t ? styles.tabActive : styles.tabInactive
               }`}
             >
               {t}
@@ -628,8 +629,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                     type="button"
                     onClick={() => setWatchSide(s)}
                     className={`rounded-t-lg px-3 py-2 text-[13px] font-semibold capitalize transition ${
-                      watchSide === s ? "bg-[#e9f6f6] text-[#058d80]" : "text-[#718096] hover:text-[#273246]"
-                    }`}
+                      watchSide === s ? "bg-[#e9f6f6]" : "hover:text-[#273246]"
+                    } ${watchSide === s ? styles.btnTeal : styles.btnMuted}`}
                   >
                     {s === "ask" ? "Ask AI" : s}
                   </button>

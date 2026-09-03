@@ -1,0 +1,16 @@
+/* Scoped contrast helpers for the AI Notetaker pages ONLY.
+ * The app-wide `button { color: inherit }` reset (unlayered) overrides Tailwind
+ * text-color utilities on <button>, so these classes pin button colors explicitly.
+ * !important keeps them winning over both the reset and layered utilities. */
+.btnWhite { color: #fff !important; }
+.btnMuted { color: #64748b !important; }
+.btnTeal { color: #058d80 !important; }
+.btnDeepGreen { color: #0b2e23 !important; }
+.tabActive { background: #273246 !important; color: #fff !important; }
+.tabInactive { color: #64748b !important; }
+.tabInactive:hover { background: #f1f5f9 !important; color: #273246 !important; }
+.timePill { background: #e9f6f6 !important; color: #058d80 !important; }
+.timePill:hover { background: #058d80 !important; color: #fff !important; }
+.acceptPill { background: #273246 !important; color: #fff !important; }
+.acceptPill:hover { background: #058d80 !important; color: #fff !important; }
+.chipBtn:hover { border-color: #058d80 !important; color: #058d80 !important; }
