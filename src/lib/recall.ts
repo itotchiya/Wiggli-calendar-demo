@@ -93,12 +93,14 @@ export async function getTranscriptDownloadUrl(transcriptId: string): Promise<st
   return url;
 }
 
-export type RecallWord = { text?: string; start_timestamp?: number; end_timestamp?: number };
-export type RecallParticipant = { id?: number | string; name?: string; is_host?: boolean };
-export type RecallTranscriptDoc = {
-  participants?: RecallParticipant[];
-  transcript?: { participant?: { id?: number | string; name?: string }; words?: RecallWord[] }[];
-};
+export type RecallTimestamp = number | { relative?: number | null; absolute?: string | null } | null | undefined;
+export type RecallWord = { text?: string; start_timestamp?: RecallTimestamp; end_timestamp?: RecallTimestamp };
+export type RecallParticipant = { id?: number | string; name?: string | null; is_host?: boolean };
+export type RecallTranscriptEntry = { participant?: RecallParticipant | null; words?: RecallWord[] };
+export type RecallTranscriptDoc =
+  | RecallTranscriptEntry[]
+  | { transcript?: RecallTranscriptEntry[]; participants?: RecallParticipant[] }
+  | { paragraphs?: RecallTranscriptEntry[] };
 
 export async function downloadTranscriptJson(url: string): Promise<RecallTranscriptDoc> {
   const response = await fetch(url);
@@ -116,22 +118,57 @@ function formatTime(seconds: number): string {
   return `${h}:${m}:${sec}`;
 }
 
-/** Speaker-grouped readable lines (Recall sample-app pattern). */
+/** Seconds from a Recall timestamp: number, {relative}, or {absolute ISO}. */
+export function recallTimestampToSeconds(ts: RecallTimestamp): number {
+  if (typeof ts === "number" && Number.isFinite(ts)) return ts;
+  if (ts && typeof ts === "object") {
+    if (typeof ts.relative === "number" && Number.isFinite(ts.relative)) return ts.relative;
+    if (typeof ts.absolute === "string") {
+      const ms = Date.parse(ts.absolute);
+      if (Number.isFinite(ms)) return ms / 1000;
+    }
+  }
+  return 0;
+}
+
+function transcriptEntries(doc: RecallTranscriptDoc): RecallTranscriptEntry[] {
+  if (Array.isArray(doc)) return doc;
+  const obj = doc as { transcript?: unknown; paragraphs?: unknown };
+  if (Array.isArray(obj.transcript)) return obj.transcript as RecallTranscriptEntry[];
+  if (Array.isArray(obj.paragraphs)) return obj.paragraphs as RecallTranscriptEntry[];
+  return [];
+}
+
+/** Speaker-grouped readable lines (Recall sample-app pattern, schema-tolerant). */
 export function toReadableTranscript(doc: RecallTranscriptDoc): ReadableLine[] {
+  const entries = transcriptEntries(doc);
   const names = new Map<string, string>();
-  for (const p of doc.transcript ?? []) {
+  for (const p of entries) {
     const id = String(p.participant?.id ?? "?");
     if (!names.has(id)) names.set(id, p.participant?.name ?? `Speaker ${id}`);
   }
   const lines: ReadableLine[] = [];
-  for (const p of doc.transcript ?? []) {
+  for (const p of entries) {
     const id = String(p.participant?.id ?? "?");
     const words = (p.words ?? []).map((w) => w.text ?? "").join(" ").trim();
     if (!words) continue;
-    const first = (p.words ?? [])[0]?.start_timestamp ?? 0;
+    const first = recallTimestampToSeconds((p.words ?? [])[0]?.start_timestamp);
     lines.push({ speaker: names.get(id) ?? id, time: formatTime(first), text: words });
   }
   return lines;
+}
+
+/** Retrieve a recording to resolve its transcript download URL. */
+export async function getRecordingTranscriptSource(recordingId: string): Promise<{ transcriptId?: string; downloadUrl?: string }> {
+  const response = await recallFetch(`/api/v1/recording/${recordingId}/`);
+  if (!response.ok) throw new Error(`Recall get recording failed (${response.status}).`);
+  const data = (await response.json()) as {
+    media_shortcuts?: { transcript?: { id?: string; data?: { download_url?: string } } };
+  };
+  return {
+    transcriptId: data.media_shortcuts?.transcript?.id,
+    downloadUrl: data.media_shortcuts?.transcript?.data?.download_url,
+  };
 }
 
 export function readableToText(lines: ReadableLine[]): string {

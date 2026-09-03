@@ -200,6 +200,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [watchSide, setWatchSide] = useState<"transcript" | "insights" | "ask">("transcript");
   const [paste, setPaste] = useState("");
   const [busy, setBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
   const [chat, setChat] = useState<ChatMsg[]>([]);
@@ -300,6 +301,21 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     });
     if (res.ok) void load();
     else showToast("Review failed");
+  };
+
+  const retrySync = async () => {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/notetaker/notes/${id}/sync`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setNote(data.note);
+      showToast("Transcript recovered from Recall.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetrying(false);
+    }
   };
 
   const sendChat = async (text: string) => {
@@ -516,16 +532,28 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 ))}
               </div>
             </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+            {note.status === "FAILED" && note.recallRecordingId && (
+              <button
+                type="button"
+                disabled={retrying}
+                onClick={() => void retrySync()}
+                className="inline-flex h-9 items-center rounded-full bg-[#3DFFA2] px-3.5 text-[12.5px] font-bold text-[#0b2e23] transition hover:brightness-110 disabled:opacity-50"
+              >
+                {retrying ? "Recovering…" : "Retry from Recall"}
+              </button>
+            )}
             {note.transcriptText && (
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void reanalyze()}
-                className="inline-flex h-9 shrink-0 items-center rounded-full border border-white/25 bg-white/5 px-3.5 text-[12.5px] font-semibold text-white transition hover:bg-white/15 disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-full border border-white/25 bg-white/5 px-3.5 text-[12.5px] font-semibold text-white transition hover:bg-white/15 disabled:opacity-50"
               >
                 Re-analyze
               </button>
             )}
+            </div>
           </div>
         </div>
 
