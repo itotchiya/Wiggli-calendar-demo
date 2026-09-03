@@ -66,7 +66,7 @@ function mapStatus(status: string): PreviewStatus {
 }
 
 function roleFor(type: string | null) {
-  if (type === "candidate" || type === "freelancer") return "Candidate";
+  if (type === "candidate") return "Candidate";
   if (type === "contact") return "Contact";
   if (type === "internal") return "Internal attendee";
   return "Attendee";
@@ -375,11 +375,14 @@ export default function CalendarPage() {
     const organizerName = session?.user?.name?.trim();
     const organizerAvatar = session?.user?.image;
     if (!organizerName) return;
-    setDraftEvents((current) => current.map((event) =>
-      event.organizerName === "You" || event.organizerName === "Organizer"
-        ? { ...event, organizerName, organizerInitials: initials(organizerName), organizerAvatar: organizerAvatar || event.organizerAvatar }
-        : event
-    ));
+    const timer = window.setTimeout(() => {
+      setDraftEvents((current) => current.map((event) =>
+        event.organizerName === "You" || event.organizerName === "Organizer"
+          ? { ...event, organizerName, organizerInitials: initials(organizerName), organizerAvatar: organizerAvatar || event.organizerAvatar }
+          : event
+      ));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [session?.user?.image, session?.user?.name]);
 
   const loadEvents = useCallback(async () => {

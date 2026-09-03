@@ -70,7 +70,7 @@ model Attendee {
   eventId     String
   email       String
   name        String?
-  type        String? // drawer attendee type: candidate | freelancer | contact | internal
+  type        String? // drawer attendee type: candidate | contact | internal
   rsvp        String    @default("NEEDS_ACTION") // NEEDS_ACTION | ACCEPTED | TENTATIVE | DECLINED
   comment     String? // Optional response comment from Google Calendar
   respondedAt DateTime?

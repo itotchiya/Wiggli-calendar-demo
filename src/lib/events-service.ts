@@ -343,7 +343,7 @@ export async function createEventAndInvite(opts: {
     names.length ? names.map((n) => `• ${n}`).join("\n") : "";
   const groupNames = (predicate: (t: string) => boolean) =>
     attendeeList.filter((a) => predicate(a.type)).map((a) => a.name);
-  const candidatesNames = groupNames((t) => t === "candidate" || t === "freelancer");
+  const candidatesNames = groupNames((t) => t === "candidate");
   const contactsNames = groupNames((t) => t === "contact");
   const internalsNames = groupNames((t) => t === "internal");
 
@@ -777,7 +777,7 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
   const bullets = (names: string[]) => (names.length ? names.map((n) => `• ${n}`).join("\n") : "");
   const groupNames = (predicate: (t: string) => boolean) =>
     attendeeList.filter((a) => predicate(a.type)).map((a) => a.name);
-  const candidatesNames = groupNames((t) => t === "candidate" || t === "freelancer");
+  const candidatesNames = groupNames((t) => t === "candidate");
   const contactsNames = groupNames((t) => t === "contact");
   const internalsNames = groupNames((t) => t === "internal");
 

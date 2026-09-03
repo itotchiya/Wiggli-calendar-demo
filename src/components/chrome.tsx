@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
   { label: "Tasks", icon: ClipboardList },
   { label: "Jobs", icon: BriefcaseBusiness },
   { label: "Permanent", icon: Armchair, children: [{ label: "Candidates" }, { label: "Notes" }] },
-  { label: "Temporary", icon: Hourglass, children: [{ label: "Freelancers" }, { label: "Missions" }, { label: "Timesheets" }] },
+  { label: "Temporary", icon: Hourglass, children: [{ label: "Missions" }, { label: "Timesheets" }] },
   { label: "Organizations", icon: Building2 },
   { label: "Contacts", icon: ContactRound },
   { label: "Opportunities", icon: Target },

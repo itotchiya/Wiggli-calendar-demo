@@ -76,7 +76,7 @@ function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; labe
 
 export type TimedDate = { date: string; endDate?: string; start: string; end: string; isRange?: boolean };
 type ReminderUnit = "minutes" | "hours" | "days" | "weeks";
-type AttendeeType = "candidate" | "freelancer" | "contact" | "internal";
+type AttendeeType = "candidate" | "contact" | "internal";
 type Organization = { id: string; name: string; initials: string; relationship: "Holding" | "Subsidiary" };
 export type LinkedContext = { id: string; kind: "job" | "opportunity"; title: string; contract: "Permanent" | "Temporary"; organizationId: string; organization: string; organizationInitials: string };
 type AttendeeSchedule = { status: "Busy" | "Out of Office" | "Awaiting response" | "Confirmed"; date: string; time?: string };
@@ -120,16 +120,6 @@ const candidateLinks: Record<string, LinkedContext[]> = {
   "lucas-martin": [linkedContexts.backend, linkedContexts.engineering],
 };
 
-const freelancerLinks: Record<string, LinkedContext[]> = {
-  "maya-singh": [linkedContexts.frontend],
-  "luca-fernandez": [linkedContexts.backend, linkedContexts.engineering],
-  "zara-ahmed": [linkedContexts.novaFrontend, linkedContexts.novaPlatform],
-  "kenji-tanaka": [],
-  "chloe-dubois": [linkedContexts.cobaltDesign],
-  "diego-alvarez": [linkedContexts.frontend, linkedContexts.novaFrontend],
-  "fatima-el-idrissi": [linkedContexts.zephyrResearch],
-};
-
 const internalSchedules: AttendeeSchedule[][] = [
   [{ status: "Busy", date: "05/08/2026", time: "13:00 – 15:00" }, { status: "Awaiting response", date: "12/08/2026" }, { status: "Confirmed", date: "25/08/2026" }],
   [{ status: "Out of Office", date: "09/08/2026", time: "09:00 – 17:00" }, { status: "Confirmed", date: "18/08/2026", time: "11:00 – 12:00" }],
@@ -155,7 +145,6 @@ const contactOrganizations: Record<string, string[]> = {
 
 const attendeeTypeLabels: Record<AttendeeType, string> = {
   candidate: "Candidate",
-  freelancer: "Freelancer",
   contact: "Contact",
   internal: "Internal attendee",
 };
@@ -186,15 +175,6 @@ const attendeeDirectory: Record<AttendeeType, AttendeePerson[]> = {
     ["nadia-benali", "Nadia Benali", randFrom(TEST_EMAILS)],
     ["lucas-martin", "Lucas Martin", randFrom(TEST_EMAILS)],
   ].map(([id, name, email], index) => ({ id, name, email, type: "candidate" as const, avatar: `/avatars/avatar-${index + 1}.webp`, links: candidateLinks[id] })),
-  freelancer: [
-    ["maya-singh", "Maya Singh", randFrom(TEST_EMAILS)],
-    ["luca-fernandez", "Luca Fernandez", randFrom(TEST_EMAILS)],
-    ["zara-ahmed", "Zara Ahmed", randFrom(TEST_EMAILS)],
-    ["kenji-tanaka", "Kenji Tanaka", randFrom(TEST_EMAILS)],
-    ["chloe-dubois", "Chloe Dubois", randFrom(TEST_EMAILS)],
-    ["diego-alvarez", "Diego Alvarez", randFrom(TEST_EMAILS)],
-    ["fatima-el-idrissi", "Fatima El Idrissi", randFrom(TEST_EMAILS)],
-  ].map(([id, name, email], index) => ({ id, name, email, type: "freelancer" as const, avatar: `/avatars/avatar-${index + 9}.webp`, links: freelancerLinks[id] })),
   contact: [
     ["linksomoney-contact", "Links Omoney", "linksomoney@gmail.com"],
     ["luxqoox-contact", "Lux Qoox", "linksomoney@gmail.com"],
@@ -408,7 +388,7 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
   const [menu, setMenu] = useState<"types" | AttendeeType | null>(null);
   const [query, setQuery] = useState("");
   const pickerRef = useRef<HTMLDivElement>(null);
-  const typeIcons: Record<AttendeeType, IconType> = { candidate: UserRound, freelancer: BriefcaseBusiness, contact: ContactRound, internal: UsersRound };
+  const typeIcons: Record<AttendeeType, IconType> = { candidate: UserRound, contact: ContactRound, internal: UsersRound };
   const activePeople = menu && menu !== "types" ? attendeeDirectory[menu].filter((person) => `${person.name} ${person.email}`.toLowerCase().includes(query.toLowerCase())) : [];
 
   useEffect(() => {
@@ -437,7 +417,7 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
 
       {menu === "types" && (
         <div className="attendee-type-menu" role="menu" aria-label="Attendee type">
-          {(["candidate", "freelancer", "contact", "internal"] as AttendeeType[]).map((type) => {
+          {(["candidate", "contact", "internal"] as AttendeeType[]).map((type) => {
             const Icon = typeIcons[type];
             return (
               <div key={type} className="attendee-type-option-wrap group relative">
@@ -1300,7 +1280,7 @@ export function EventDrawer({
   const invitationPreparedRef = useRef(false);
   const todayKey = dateKey(getTodayUtcPlusTwo());
   const startDate = occurrences[0]?.date ?? "";
-  const selectedTalent = selectedAttendees.find((person) => person.type === "candidate" || person.type === "freelancer");
+  const selectedTalent = selectedAttendees.find((person) => person.type === "candidate");
   const selectedContact = selectedAttendees.find((person) => person.type === "contact");
   const selectedInternals = selectedAttendees.filter((person) => person.type === "internal");
 
@@ -1336,7 +1316,7 @@ export function EventDrawer({
 
   const availableInviteTabs = useMemo(() => {
     const tabs: { key: "candidate" | "contact" | "internal"; label: string }[] = [];
-    if (selectedAttendees.some((person) => person.type === "candidate" || person.type === "freelancer")) {
+    if (selectedAttendees.some((person) => person.type === "candidate")) {
       tabs.push({ key: "candidate", label: "Candidate Invitation" });
     }
     if (selectedAttendees.some((person) => person.type === "contact")) {
@@ -1378,7 +1358,7 @@ export function EventDrawer({
   const removeAttendee = (id: string) => {
     const removing = selectedAttendees.find((person) => person.id === id);
     setSelectedAttendees((current) => current.filter((person) => person.id !== id));
-    if (removing?.type === "candidate" || removing?.type === "freelancer" || removing?.type === "contact") {
+    if (removing?.type === "candidate" || removing?.type === "contact") {
       setSelectedOrganization(null);
       setSelectedContext(null);
       setOrgError(false);
@@ -2052,7 +2032,7 @@ export function EventDrawer({
    */
   const availableVariables = useMemo(() => {
     const linkedTypes = new Set(linkedRecords.map((r) => r.type));
-    const hasCandidates = selectedAttendees.some((p) => p.type === "candidate" || p.type === "freelancer");
+    const hasCandidates = selectedAttendees.some((p) => p.type === "candidate");
     const hasContacts = selectedAttendees.some((p) => p.type === "contact");
     const hasInternals = selectedAttendees.some((p) => p.type === "internal");
     const hasMeet = locationSnapshot?.type === "online" && locationSnapshot?.provider === "google";
@@ -2086,7 +2066,7 @@ export function EventDrawer({
 
   const activeRecipients = useMemo(() => {
     if (activeInviteTab === "candidate") {
-      const candidates = selectedAttendees.filter((p) => p.type === "candidate" || p.type === "freelancer");
+      const candidates = selectedAttendees.filter((p) => p.type === "candidate");
       return candidates.length > 0 ? candidates : selectedAttendees;
     }
     if (activeInviteTab === "contact") {

@@ -1,5 +1,5 @@
 export type SmartAudience = "candidate" | "contact" | "internal";
-export type SmartAttendeeType = SmartAudience | "freelancer";
+export type SmartAttendeeType = SmartAudience;
 export type SmartLinkedType = "Candidate" | "Contact" | "Job" | "Opportunity" | "Organization";
 
 export type SmartLinkedRecord = {
@@ -113,7 +113,7 @@ function parseEventSlots(eventRaw: Record<string, unknown>, fallback: SmartEvent
 }
 
 export function audienceForAttendeeType(type: SmartAttendeeType): SmartAudience {
-  return type === "freelancer" ? "candidate" : type;
+  return type;
 }
 
 export function allowedLinkedRecordsForAudience(
@@ -182,7 +182,7 @@ export function parseSmartEventDocument(value: unknown): SmartEventDocument {
   const attendees = (Array.isArray(root.attendees) ? root.attendees : []).map((item) => {
     const attendee = item as Record<string, unknown>;
     const type = attendee.type;
-    if (!["candidate", "freelancer", "contact", "internal"].includes(String(type))) {
+    if (!["candidate", "contact", "internal"].includes(String(type))) {
       throw new Error("Invalid attendee type.");
     }
     const email = requiredString(attendee.email, "Attendee email").toLowerCase();

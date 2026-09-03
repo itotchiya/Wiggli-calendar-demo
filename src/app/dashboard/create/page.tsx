@@ -89,12 +89,15 @@ function EmailPreview(props: {
   timezone: string;
   customHtml: boolean;
 }) {
+  // Stable preview fallbacks (lazy init keeps render pure for the compiler).
+  const [fallbackStart] = useState(() => new Date());
+  const [fallbackEnd] = useState(() => new Date(Date.now() + 3600_000));
   const startUtc = props.start
     ? zonedWallClockToUtc(props.start, props.timezone)
-    : new Date();
+    : fallbackStart;
   const endUtc = props.end
     ? zonedWallClockToUtc(props.end, props.timezone)
-    : new Date(Date.now() + 3600_000);
+    : fallbackEnd;
 
   const ctx: InviteContext = {
     event: {

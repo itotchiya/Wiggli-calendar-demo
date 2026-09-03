@@ -45,7 +45,7 @@ export const INVITE_VARIABLES: InviteVariable[] = [
   { tag: "[Organizer.Email]", label: "Organizer email", desc: "The sender's email address" },
   { tag: "[Organizer.Phone]", label: "Organizer phone", desc: "The sender's phone number, if configured" },
   { tag: "[Attendees.List]", label: "Attendees list", desc: "Bullet list of ALL participant names and email addresses" },
-  { tag: "[Attendees.Candidates]", label: "Candidate attendees", desc: "Bullet list of candidate/freelancer participants only" },
+  { tag: "[Attendees.Candidates]", label: "Candidate attendees", desc: "Bullet list of candidate participants only" },
   { tag: "[Attendees.Contacts]", label: "Contact attendees", desc: "Bullet list of external contact participants only" },
   { tag: "[Attendees.Internals]", label: "Internal attendees", desc: "Bullet list of internal colleague participants only" },
 
@@ -127,7 +127,7 @@ export const LINKED_RECORD_CONTEXTS: Record<string, string> = {
  */
 export const TAB_AUDIENCE_CONTEXTS: Record<"candidate" | "contact" | "internal", string> = {
   candidate:
-    "A job candidate or freelancer. Describe other participants only when the attendance data marks them as attending.",
+    "A job candidate. Describe other participants only when the attendance data marks them as attending.",
   contact:
     "An external client contact. Describe candidates or other participants only when the attendance data marks them as attending.",
   internal:
