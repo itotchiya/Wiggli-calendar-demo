@@ -41,6 +41,7 @@ model Event {
 
   attendees Attendee[]
   proposals EventProposal[]
+  note      MeetingNote?
 
   @@index([googleEventId])
   @@index([source])
@@ -101,4 +102,73 @@ model RsvpTokenLog {
 
   @@index([eventId, attendeeEmail])
   @@index([token])
+}
+
+/** AI Notetaker — one row per event with the toggle on. The row's existence IS the toggle. */
+model MeetingNote {
+  id            String   @id @default(cuid())
+  eventId       String   @unique
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // lifecycle: CREATED → JOINING → RECORDING → TRANSCRIBED → PROCESSING → READY | FAILED
+  status        String   @default("CREATED")
+  statusMessage String? // error detail when FAILED; last bot subcode otherwise
+
+  // capture source: MANUAL_PASTE | AUDIO_UPLOAD | RECALL_BOT
+  source        String   @default("RECALL_BOT")
+  recallBotId   String?
+  recallRecordingId String?
+  recallRecordingUrl String?
+
+  transcriptText String? // full transcript (speakers + [mm:ss] lines)
+  transcriptJson Json? // [{speaker, time, text}] when parseable
+
+  // ONE Gemini structured-output call, stored raw + parsed:
+  aiRaw        Json? // verbatim Gemini JSON
+  summary      Json? // {overview, experience[], skills[], ...} per event-type template
+  templateUsed String? // eventType → template name
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  insights Insight[]
+  actions  NoteAction[]
+
+  @@index([status])
+  @@index([recallBotId])
+}
+
+/** One structured fact extracted from the transcript (Spott-style suggest → review). */
+model Insight {
+  id        String      @id @default(cuid())
+  noteId    String
+  note      MeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  field      String // notice_period | salary_expectation | availability | skill | ...
+  value      String
+  confidence Float?
+  speaker    String? // candidate | interviewer | unknown
+  timestamp  String? // "00:21:14"
+  evidence   String? // exact transcript quote
+  // review: PENDING → ACCEPTED | IGNORED
+  reviewStatus String @default("PENDING")
+
+  @@index([noteId, reviewStatus])
+}
+
+/** One suggested follow-up extracted from the transcript. */
+model NoteAction {
+  id        String      @id @default(cuid())
+  noteId    String
+  note      MeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  title      String
+  owner      String? // organizer | candidate | contact
+  dueDate    String?
+  timestamp  String?
+  evidence   String?
+  // review: PENDING → CREATED_TASK | IGNORED
+  reviewStatus String @default("PENDING")
+
+  @@index([noteId, reviewStatus])
 }

@@ -20,6 +20,7 @@ import {
   LogOut,
   Mail,
   MailCheck,
+  Mic,
   Plus,
   Settings,
   Target,
@@ -51,6 +52,7 @@ const navItems: NavItem[] = [
   { label: "Placements", icon: FileText },
   { label: "Suppliers", icon: UsersRound, children: [{ label: "Search Suppliers" }, { label: "My Suppliers" }, { label: "Suppliers Management" }] },
   { label: "Calendar", icon: CalendarDays, href: "/dashboard/calendar" },
+  { label: "AI Notetaker", icon: Mic, href: "/dashboard/notetaker" },
   { label: "Settings", icon: Settings, children: [{ label: "My Profile" }, { label: "Users & Departments" }, { label: "Email Templates" }, { label: "Custom Fields Manager" }] },
   { label: "Emailing (Testing)", icon: MailCheck },
 ];

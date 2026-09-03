@@ -24,6 +24,7 @@ import {
   Map,
   MapPin,
   MessageSquareText,
+  Mic,
   Monitor,
   Loader2,
   PenLine,
@@ -1217,6 +1218,7 @@ export function EventDrawer({
   const [eventTypeMenuOpen, setEventTypeMenuOpen] = useState(false);
   const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
   const [sending, setSending] = useState(false);
+  const [notetakerEnabled, setNotetakerEnabled] = useState(false);
 
   // Step 2 Invitation States
   const [activeInviteTab, setActiveInviteTab] = useState<"candidate" | "contact" | "internal">("candidate");
@@ -2013,6 +2015,22 @@ export function EventDrawer({
       const draftIsBeingScheduled = initialStep === 2 && Boolean(editingEvent && String(editingEvent.id).startsWith("draft-"));
       onCreate(title.trim(), getOccurrences(), draftIsBeingScheduled ? { ...buildMeta(), status: "SCHEDULED" } : buildMeta());
       showToast(`${title.trim()} created — ${resendRsvpMode ? "Resend RSVP invitations" : "Google event"}${created.hangoutLink ? " + Meet link" : ""} synced`);
+      // AI Notetaker hook: schedule the Recall bot on the created event (fire-and-forget).
+      if (notetakerEnabled && created.id) {
+        const eventId = String(created.id);
+        setNotetakerEnabled(false);
+        void fetch("/api/notetaker/notes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ eventId, source: "RECALL_BOT" }),
+        })
+          .then(async (noteRes) => {
+            const noteBody = await noteRes.json().catch(() => ({}));
+            if (!noteRes.ok) throw new Error(noteBody.error ?? `HTTP ${noteRes.status}`);
+            showToast("AI Notetaker scheduled — admit “Wiggli Notetaker” in the Meet.");
+          })
+          .catch((noteErr) => showToast(`Notetaker failed: ${noteErr instanceof Error ? noteErr.message : "unknown error"}`));
+      }
       window.setTimeout(() => {
         if (recipients.length === 1) showToast(`Personalized invitation emailed to ${recipients[0].name}`);
         else showToast(`${recipients.length} personalized invitations sent successfully`);
@@ -2439,6 +2457,10 @@ export function EventDrawer({
             <div className="drawer-footer">
               <button className="text-button" onClick={onClose}>Cancel</button>
               <div>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 10, fontSize: 13, cursor: "pointer" }} title="Recall bot joins the Google Meet, records, transcribes and drafts AI notes.">
+                  <input type="checkbox" checked={notetakerEnabled} onChange={(e) => setNotetakerEnabled(e.target.checked)} disabled={sending} />
+                  <Mic size={14} /> AI Notetaker
+                </label>
                 <button className="back-step-button" type="button" onClick={() => setDrawerStep(1)}>
                   <ChevronLeft size={16} /> Back
                 </button>
