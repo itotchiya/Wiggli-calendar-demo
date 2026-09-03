@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bot, CalendarPlus, Mic, PlayCircle, RefreshCw, Search, Video } from "lucide-react";
+import {
+  Bot, CalendarPlus, ChevronRight, CircleDot, CircleCheck, Loader2,
+  Mic, PlayCircle, RefreshCw, Search, TriangleAlert, Video,
+} from "lucide-react";
 import { Header } from "@/components/chrome";
-import { StatusChip } from "@/components/notetaker-ui";
 import { showToast } from "@/components/toaster";
 import type { EventDto } from "@/types/event";
 
@@ -28,6 +30,20 @@ function statusGroup(status: string): string {
   return "Processing";
 }
 
+const STATUS_PILL: Record<string, string> = {
+  CREATED: "bg-slate-100 text-slate-500",
+  JOINING: "bg-blue-50 text-blue-600",
+  RECORDING: "bg-red-50 text-red-600",
+  TRANSCRIBED: "bg-violet-50 text-violet-600",
+  PROCESSING: "bg-amber-50 text-amber-600",
+  READY: "bg-teal-50 text-teal-700",
+  FAILED: "bg-red-50 text-red-600",
+};
+
+function initials(name: string): string {
+  return name.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+}
+
 export default function NotetakerPage() {
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [events, setEvents] = useState<EventDto[]>([]);
@@ -39,15 +55,19 @@ export default function NotetakerPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
+    setLoadError(null);
     try {
       const res = await fetch("/api/notetaker/notes");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setNotes(data.notes ?? []);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to load notes");
+      const msg = err instanceof Error ? err.message : "Failed to load notes";
+      setLoadError(msg);
+      showToast(msg);
     } finally {
       setLoading(false);
     }
@@ -73,7 +93,7 @@ export default function NotetakerPage() {
       const res = await fetch("/api/notetaker/notes", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventId, source: withBot ? "RECALL_BOT" : "MANUAL" }),
+        body: JSON.stringify({ eventId, source: withBot ? "RECALL_BOT" : "MANUAL_PASTE" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -118,160 +138,230 @@ export default function NotetakerPage() {
     });
   }, [notes, query, filter]);
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { All: notes.length };
-    for (const f of FILTERS.slice(1)) c[f] = notes.filter((n) => statusGroup(n.status) === f).length;
-    return c;
-  }, [notes]);
+  const stats = useMemo(() => ({
+    total: notes.length,
+    ready: notes.filter((n) => n.status === "READY").length,
+    recording: notes.filter((n) => n.status === "RECORDING" || n.status === "JOINING").length,
+  }), [notes]);
 
   return (
     <div className="flex h-full flex-col">
       <Header kicker={<span className="inline-flex items-center gap-2"><Mic size={16} /> AI Notetaker</span>} />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-[21px] font-semibold tracking-tight text-[#273246]">Meeting notes</h1>
-            <p className="text-[13.5px] text-[#718096]">
-              The bot joins Google Meet, records, transcribes and drafts notes — {notes.length} note{notes.length === 1 ? "" : "s"} so far.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" className="icon-button" title="Refresh" onClick={() => void load()}>
-              <RefreshCw size={16} />
-            </button>
-            <button type="button" className="text-button" onClick={() => { setTestOpen(true); setTestResult(null); }}>
-              <Bot size={15} /> Test join
-            </button>
-            <button type="button" className="primary-button" onClick={() => setPickerOpen(true)}>
-              <CalendarPlus size={15} /> New note
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-52 flex-1 sm:max-w-xs">
-            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a6aa]" />
-            <input
-              className="h-9 w-full rounded-full border border-[#e1e6ec] bg-white pl-8 pr-3 text-[13px] outline-none placeholder:text-[#a3a6aa] focus:border-[#058d80]"
-              placeholder="Search meetings or candidates…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+      <div className="flex-1 overflow-y-auto bg-[#f4f6f9]">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6">
+          {/* Hero */}
+          <div className="relative overflow-hidden rounded-3xl bg-[#242e45] p-6 text-white md:p-8">
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{ background: "radial-gradient(520px 220px at 85% -20%, rgba(61,255,162,0.22), transparent 60%), radial-gradient(420px 200px at 10% 120%, rgba(5,141,128,0.35), transparent 60%)" }}
             />
-          </div>
-          <div className="flex items-center gap-1 rounded-full border border-[#e9edf2] bg-white p-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`rounded-full px-3 py-1 text-[12.5px] font-semibold transition ${
-                  filter === f ? "bg-[#273246] text-white" : "text-[#718096] hover:text-[#273246]"
-                }`}
-              >
-                {f}{counts[f] ? ` · ${counts[f]}` : ""}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="py-10 text-center text-[13.5px] text-[#718096]">Loading notes…</p>
-        ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[#e1e6ec] bg-white px-6 py-14 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#e9f6f6] text-[#058d80]"><Mic size={22} /></span>
-            <div>
-              <p className="text-[15px] font-semibold text-[#273246]">{notes.length === 0 ? "No notes yet" : "Nothing matches"}</p>
-              <p className="mx-auto mt-1 max-w-sm text-[13px] text-[#718096]">
-                {notes.length === 0
-                  ? "Pick an event and send the bot — or paste a transcript to test the AI without a bot."
-                  : "Try a different search or filter."}
-              </p>
-            </div>
-            {notes.length === 0 && (
-              <button type="button" className="primary-button" onClick={() => setPickerOpen(true)}>
-                <CalendarPlus size={15} /> New note
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-[#e9edf2] bg-white">
-            {visible.map((n, idx) => (
-              <Link
-                key={n.id}
-                href={`/dashboard/notetaker/${n.id}`}
-                className={`group flex items-center gap-3 px-4 py-3.5 transition hover:bg-[#f6fbfb] ${idx > 0 ? "border-t border-[#eef1f5]" : ""}`}
-              >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef4f4] text-[#058d80] transition group-hover:bg-[#e9f6f6]">
-                  {n.status === "READY" ? <PlayCircle size={19} /> : <Video size={18} />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold text-[#273246]">{n.event.summary}</span>
-                  <span className="mt-0.5 block truncate text-[12.5px] text-[#718096]">
-                    {candidateName(n)} · {new Date(n.event.start).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    {n._count.insights > 0 || n._count.actions > 0 ? ` · ${n._count.insights} insights · ${n._count.actions} actions` : ""}
-                  </span>
-                </span>
-                <StatusChip status={n.status} />
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {testOpen && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" onClick={() => setTestOpen(false)}>
-            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <p className="text-[15px] font-semibold text-[#273246]">Test join</p>
-              <p className="mt-0.5 text-[12.5px] text-[#718096]">
-                Paste a Google Meet link — the bot joins right now, no event needed. Join the same Meet yourself and admit “Wiggli Notetaker”.
-              </p>
-              <input
-                className="mt-3 h-10 w-full rounded-xl border border-[#e1e6ec] bg-white px-3 text-[13px] outline-none placeholder:text-[#a3a6aa] focus:border-[#058d80]"
-                placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                value={testUrl}
-                onChange={(e) => setTestUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void testJoin();
-                }}
-              />
-              {testResult && (
-                <p className="mt-2 rounded-xl bg-[#f4f7f9] p-3 text-[12.5px] leading-relaxed text-[#273246]">{testResult}</p>
-              )}
-              <div className="mt-3 flex justify-end gap-2">
-                <button type="button" className="text-button" onClick={() => setTestOpen(false)}>Close</button>
-                <button type="button" className="primary-button" disabled={testBusy || !testUrl.trim()} onClick={() => void testJoin()}>
-                  <Bot size={15} /> {testBusy ? "Sending…" : "Send bot now"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {pickerOpen && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" onClick={() => setPickerOpen(false)}>
-            <div className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between border-b border-[#eef1f5] px-5 py-4">
-                <div>
-                  <p className="text-[15px] font-semibold text-[#273246]">New note</p>
-                  <p className="text-[12.5px] text-[#718096]">Send the bot, or create empty and paste a transcript.</p>
+            <div className="relative flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-xl">
+                <p className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[#3DFFA2]">
+                  <Mic size={12} /> Wiggli Notetaker
+                </p>
+                <h1 className="mt-2 text-[24px] font-semibold tracking-tight md:text-[28px]">Never take meeting notes again</h1>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-[#c3cad4]">
+                  The bot joins your Google Meet, records, transcribes and drafts candidate insights — all linked to your jobs and contacts.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[#3DFFA2] px-4 text-[13.5px] font-bold text-[#0b2e23] transition hover:brightness-110"
+                  >
+                    <CalendarPlus size={16} /> New note
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTestOpen(true); setTestResult(null); }}
+                    className="inline-flex h-10 items-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 text-[13.5px] font-semibold text-white transition hover:bg-white/15"
+                  >
+                    <Bot size={16} /> Test join
+                  </button>
                 </div>
-                <button type="button" className="icon-button" onClick={() => setPickerOpen(false)}>✕</button>
               </div>
-              <div className="max-h-[55vh] overflow-y-auto p-2">
-                {events.length === 0 && <p className="p-4 text-[13px] text-[#718096]">No events found.</p>}
-                {events.map((e) => (
-                  <div key={e.id} className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition hover:bg-[#f6fbfb]">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-semibold text-[#273246]">{e.summary}</p>
-                      <p className="text-[12px] text-[#718096]">{new Date(e.start).toLocaleString()}</p>
-                    </div>
-                    <button type="button" className="text-button" onClick={() => void createNote(e.id, false)}>Paste transcript</button>
-                    <button type="button" className="primary-button" onClick={() => void createNote(e.id, true)}>Send bot</button>
+              <div className="flex gap-2.5">
+                {[
+                  { label: "Notes", value: stats.total, icon: <Video size={15} /> },
+                  { label: "Ready", value: stats.ready, icon: <CircleCheck size={15} /> },
+                  { label: "Recording", value: stats.recording, icon: <CircleDot size={15} /> },
+                ].map((s) => (
+                  <div key={s.label} className="min-w-[86px] rounded-2xl border border-white/10 bg-white/5 px-3.5 py-3 backdrop-blur">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#98a3b8]">{s.icon}{s.label}</p>
+                    <p className="mt-0.5 text-[22px] font-semibold leading-none">{s.value}</p>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-        )}
+
+          {loadError && (
+            <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-700">
+              <TriangleAlert size={16} /> Couldn’t load notes ({loadError}).
+              <button type="button" className="ml-auto font-bold underline" onClick={() => void load()}>Retry</button>
+            </div>
+          )}
+
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-52 flex-1 sm:max-w-xs">
+              <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                className="h-10 w-full rounded-full border border-slate-200 bg-white pl-9 pr-3 text-[13px] shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-600"
+                placeholder="Search meetings or candidates…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+              {FILTERS.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition ${
+                    filter === f ? "bg-[#242e45] text-white shadow" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:text-slate-800"
+              title="Refresh"
+            >
+              <RefreshCw size={16} />
+            </button>
+          </div>
+
+          {/* List */}
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-14 text-[13.5px] text-slate-500">
+              <Loader2 size={16} className="animate-spin" /> Loading notes…
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+              <span className="grid h-13 w-13 place-items-center rounded-2xl bg-teal-50 p-3 text-teal-700"><Mic size={24} /></span>
+              <div>
+                <p className="text-[15px] font-semibold text-slate-800">{notes.length === 0 ? "No notes yet" : "Nothing matches"}</p>
+                <p className="mx-auto mt-1 max-w-sm text-[13px] text-slate-500">
+                  {notes.length === 0
+                    ? "Pick an event and send the bot — or paste a transcript to test the AI without a bot."
+                    : "Try a different search or filter."}
+                </p>
+              </div>
+              {notes.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#242e45] px-4 text-[13.5px] font-semibold text-white transition hover:bg-teal-700"
+                >
+                  <CalendarPlus size={16} /> New note
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {visible.map((n) => {
+                const name = candidateName(n);
+                return (
+                  <Link
+                    key={n.id}
+                    href={`/dashboard/notetaker/${n.id}`}
+                    className="group flex items-center gap-3.5 rounded-2xl border border-slate-200/70 bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:-translate-y-px hover:border-teal-600/30 hover:shadow-[0_8px_24px_-8px_rgba(5,141,128,0.25)]"
+                  >
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#242e45] text-[13px] font-bold text-white">
+                      {name !== "—" ? initials(name) : <Video size={18} />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate text-[14.5px] font-semibold text-slate-800">{n.event.summary}</span>
+                        {(n.status === "RECORDING" || n.status === "JOINING") && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-red-600">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" /> Live
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[12.5px] text-slate-500">
+                        {name} · {new Date(n.event.start).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {n._count.insights > 0 || n._count.actions > 0 ? ` · ${n._count.insights} insights · ${n._count.actions} actions` : ""}
+                        {n.status === "READY" && n._count.insights === 0 ? " · tap to watch" : ""}
+                      </span>
+                    </span>
+                    {n.status === "READY" && (
+                      <span className="hidden shrink-0 items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-[11.5px] font-bold text-teal-700 transition group-hover:flex">
+                        <PlayCircle size={13} /> Watch
+                      </span>
+                    )}
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide ${STATUS_PILL[n.status] ?? STATUS_PILL.CREATED}`}>
+                      {n.status}
+                    </span>
+                    <ChevronRight size={16} className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-teal-600" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Test join modal */}
+          {testOpen && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-[#242e45]/50 p-4 backdrop-blur-[2px]" onClick={() => setTestOpen(false)}>
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <p className="flex items-center gap-2 text-[16px] font-semibold text-slate-800"><Bot size={18} className="text-teal-700" /> Test join</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
+                  Paste a Google Meet link — the bot joins right now, no event needed. Join the same Meet yourself and admit “Wiggli Notetaker”.
+                </p>
+                <input
+                  className="mt-4 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-[13.5px] outline-none placeholder:text-slate-400 focus:border-teal-600 focus:bg-white"
+                  placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                  value={testUrl}
+                  onChange={(e) => setTestUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void testJoin();
+                  }}
+                />
+                {testResult && (
+                  <p className="mt-3 rounded-xl bg-slate-100 p-3 text-[12.5px] leading-relaxed text-slate-700">{testResult}</p>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" className="text-button" onClick={() => setTestOpen(false)}>Close</button>
+                  <button type="button" className="primary-button" disabled={testBusy || !testUrl.trim()} onClick={() => void testJoin()}>
+                    <Bot size={15} /> {testBusy ? "Sending…" : "Send bot now"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* New note modal */}
+          {pickerOpen && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-[#242e45]/50 p-4 backdrop-blur-[2px]" onClick={() => setPickerOpen(false)}>
+              <div className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="border-b border-slate-100 px-6 py-4">
+                  <p className="text-[16px] font-semibold text-slate-800">New note</p>
+                  <p className="text-[12.5px] text-slate-500">Send the bot, or create empty and paste a transcript.</p>
+                </div>
+                <div className="max-h-[55vh] overflow-y-auto p-2.5">
+                  {events.length === 0 && <p className="p-4 text-[13px] text-slate-500">No events found.</p>}
+                  {events.map((e) => (
+                    <div key={e.id} className="flex items-center gap-2 rounded-2xl px-3.5 py-3 transition hover:bg-teal-50/50">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-semibold text-slate-800">{e.summary}</p>
+                        <p className="text-[12px] text-slate-500">{new Date(e.start).toLocaleString()}</p>
+                      </div>
+                      <button type="button" className="text-button" onClick={() => void createNote(e.id, false)}>Paste transcript</button>
+                      <button type="button" className="primary-button" onClick={() => void createNote(e.id, true)}>Send bot</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

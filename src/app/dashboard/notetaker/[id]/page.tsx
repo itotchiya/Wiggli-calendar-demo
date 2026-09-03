@@ -45,9 +45,9 @@ function initials(name: string): string {
 
 function Section({ icon, title, action, children }: { icon: React.ReactNode; title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-[#e9edf2] bg-white p-4 md:p-5">
+    <section className="rounded-3xl border border-slate-200/70 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] md:p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-[14.5px] font-semibold text-[#273246]">{icon}{title}</h2>
+        <h2 className="flex items-center gap-2 text-[14.5px] font-semibold text-slate-800">{icon}{title}</h2>
         {action}
       </div>
       {children}
@@ -485,39 +485,51 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="flex h-full flex-col">
       <Header kicker="AI Notetaker" />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto bg-[#f4f6f9]">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6">
         <Link href="/dashboard/notetaker" className="inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-[#718096] transition hover:text-[#273246]">
           <ArrowLeft size={14} /> All notes
         </Link>
 
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[20px] font-semibold tracking-tight text-[#273246]">{note.event.summary}</h1>
-              <StatusChip status={note.status} />
+        <div className="relative overflow-hidden rounded-3xl bg-[#242e45] p-5 text-white md:p-6">
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(480px 200px at 90% -20%, rgba(61,255,162,0.18), transparent 60%), radial-gradient(400px 180px at 5% 120%, rgba(5,141,128,0.35), transparent 60%)" }}
+          />
+          <div className="relative flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-[20px] font-semibold tracking-tight md:text-[22px]">{note.event.summary}</h1>
+                <StatusChip status={note.status} />
+              </div>
+              <p className="mt-1 text-[13px] text-[#c3cad4]">
+                {note.event.eventType ?? "Meeting"} · {new Date(note.event.start).toLocaleString()}
+                {note.templateUsed ? ` · ${note.templateUsed} template` : ""}
+              </p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {note.event.attendees.map((a) => (
+                  <span key={a.email} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 py-1 pl-1 pr-2.5 text-[12px] font-medium text-[#e2e8f0]">
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-[#3DFFA2] text-[9px] font-bold text-[#0b2e23]">{initials(a.name ?? a.email)}</span>
+                    {a.name ?? a.email}
+                    {a.type && <span className="text-[#98a3b8]">· {a.type}</span>}
+                  </span>
+                ))}
+              </div>
             </div>
-            <p className="mt-1 text-[13px] text-[#718096]">
-              {note.event.eventType ?? "Meeting"} · {new Date(note.event.start).toLocaleString()}
-              {note.templateUsed ? ` · ${note.templateUsed} template` : ""}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {note.event.attendees.map((a) => (
-                <span key={a.email} className="inline-flex items-center gap-1.5 rounded-full bg-[#f1f5f9] py-1 pl-1 pr-2.5 text-[12px] font-medium text-[#3d4a61]">
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[9px] font-bold text-[#058d80]">{initials(a.name ?? a.email)}</span>
-                  {a.name ?? a.email}
-                  {a.type && <span className="text-[#a3a6aa]">· {a.type}</span>}
-                </span>
-              ))}
-            </div>
+            {note.transcriptText && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void reanalyze()}
+                className="inline-flex h-9 shrink-0 items-center rounded-full border border-white/25 bg-white/5 px-3.5 text-[12.5px] font-semibold text-white transition hover:bg-white/15 disabled:opacity-50"
+              >
+                Re-analyze
+              </button>
+            )}
           </div>
-          {note.transcriptText && (
-            <button type="button" className="text-button" disabled={busy} onClick={() => void reanalyze()}>
-              Re-analyze
-            </button>
-          )}
         </div>
 
-        <div className="flex w-fit items-center gap-1 rounded-full border border-[#e9edf2] bg-white p-1">
+        <div className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-full border border-slate-200/70 bg-white p-1 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
           {TABS.map((t) => (
             <button
               key={t}
@@ -543,7 +555,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         {tab === "Watch" && (
           <div className="grid items-start gap-4 lg:grid-cols-[1fr_370px]">
             <div className="flex min-w-0 flex-col gap-4">
-              <div className="overflow-hidden rounded-2xl bg-[#242e45] shadow-sm">
+              <div className="overflow-hidden rounded-3xl bg-[#242e45] shadow-[0_16px_40px_-16px_rgba(36,46,69,0.5)]">
                 {videoUrl ? (
                   <video ref={videoRef} controls className="aspect-video w-full" src={videoUrl} />
                 ) : (
@@ -580,7 +592,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 {actionCards()}
               </Section>
             </div>
-            <aside className="flex max-h-[calc(100vh-220px)] min-h-[480px] flex-col rounded-2xl border border-[#e9edf2] bg-white lg:sticky lg:top-0">
+            <aside className="flex max-h-[calc(100vh-220px)] min-h-[480px] flex-col rounded-3xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] lg:sticky lg:top-0">
               <div className="flex gap-1 border-b border-[#eef1f5] px-3 pt-2.5">
                 {(["transcript", "insights", "ask"] as const).map((s) => (
                   <button
@@ -664,6 +676,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </Section>
         )}
+      </div>
       </div>
     </div>
   );
