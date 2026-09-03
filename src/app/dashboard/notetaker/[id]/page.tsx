@@ -2,7 +2,10 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Mic, MonitorPlay, X } from "lucide-react";
+import {
+  ArrowLeft, ArrowUp, Bot, Check, CirclePlay, FileText, ListChecks,
+  MonitorPlay, Quote, Search, Sparkles, X,
+} from "lucide-react";
 import { Header } from "@/components/chrome";
 import { StatusChip, timestampToSeconds } from "@/components/notetaker-ui";
 import { showToast } from "@/components/toaster";
@@ -16,6 +19,7 @@ type NoteAction = {
   timestamp: string | null; evidence: string | null; reviewStatus: string;
 };
 type TLine = { speaker: string; time: string; text: string };
+type ChatMsg = { role: "user" | "assistant"; content: string };
 type Note = {
   id: string; status: string; statusMessage: string | null; source: string;
   recallBotId: string | null; recallRecordingId: string | null;
@@ -25,29 +29,55 @@ type Note = {
   insights: Insight[]; actions: NoteAction[];
 };
 
-const TABS = ["Watch", "Recording", "Transcript", "Summary", "Insights", "Actions", "Ask AI"] as const;
+const TABS = ["Watch", "Transcript", "Summary", "Insights", "Actions", "Ask AI"] as const;
 type Tab = (typeof TABS)[number];
+
+const SUGGESTIONS = [
+  "Summarize this meeting in 3 bullets",
+  "What salary did the candidate ask for?",
+  "What are the agreed next steps?",
+  "Any red flags or concerns?",
+];
+
+function initials(name: string): string {
+  return name.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+}
+
+function Section({ icon, title, action, children }: { icon: React.ReactNode; title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-[#e9edf2] bg-white p-4 md:p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-[14.5px] font-semibold text-[#273246]">{icon}{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 function SummaryView({ summary }: { summary: Record<string, unknown> }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {Object.entries(summary).map(([key, value]) => (
         <div key={key}>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#a3a6aa]">{key.replace(/_/g, " ")}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#a3a6aa]">{key.replace(/_/g, " ")}</p>
           {typeof value === "string" ? (
-            <p className="mt-0.5 text-[13.5px] text-[#273246]">{value || "—"}</p>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-[#273246]">{value || "—"}</p>
           ) : Array.isArray(value) ? (
             value.length === 0 ? (
-              <p className="mt-0.5 text-[13.5px] text-[#a3a6aa]">—</p>
+              <p className="mt-1 text-[13.5px] text-[#a3a6aa]">—</p>
             ) : (
-              <ul className="mt-0.5 list-disc pl-5 text-[13.5px] text-[#273246]">
+              <ul className="mt-1 flex flex-col gap-1.5">
                 {value.map((v, i) => (
-                  <li key={i}>{typeof v === "string" ? v : JSON.stringify(v)}</li>
+                  <li key={i} className="flex gap-2 text-[13.5px] leading-relaxed text-[#273246]">
+                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#058d80]" />
+                    {typeof v === "string" ? v : JSON.stringify(v)}
+                  </li>
                 ))}
               </ul>
             )
           ) : (
-            <p className="mt-0.5 text-[13.5px] text-[#273246]">{JSON.stringify(value)}</p>
+            <p className="mt-1 text-[13.5px] text-[#273246]">{JSON.stringify(value)}</p>
           )}
         </div>
       ))}
@@ -65,6 +95,104 @@ function transcriptLines(note: Note, search: string): TLine[] {
   return search ? base.filter((l) => `${l.speaker} ${l.text}`.toLowerCase().includes(search.toLowerCase())) : base;
 }
 
+function ChatPanel({ messages, thinking, onSend, disabledHint }: {
+  messages: ChatMsg[]; thinking: boolean; onSend: (text: string) => void; disabledHint: string | null;
+}) {
+  const [draft, setDraft] = useState("");
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, thinking]);
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text || thinking || disabledHint) return;
+    setDraft("");
+    onSend(text);
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-2">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#273246] text-white"><Sparkles size={20} /></span>
+            <div>
+              <p className="text-[14px] font-semibold text-[#273246]">Ask about this meeting</p>
+              <p className="mt-0.5 text-[12.5px] text-[#718096]">Answers come only from the transcript — with evidence.</p>
+            </div>
+            <div className="flex max-w-sm flex-wrap justify-center gap-1.5">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={!!disabledHint}
+                  onClick={() => onSend(s)}
+                  className="rounded-full border border-[#e1e6ec] bg-white px-3 py-1.5 text-[12px] font-medium text-[#273246] transition hover:border-[#058d80] hover:text-[#058d80] disabled:opacity-50"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((m, i) =>
+          m.role === "user" ? (
+            <div key={i} className="flex justify-end">
+              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#273246] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-white">{m.content}</div>
+            </div>
+          ) : (
+            <div key={i} className="flex gap-2.5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e9f6f6] text-[#058d80]"><Bot size={15} /></span>
+              <div className="min-w-0 flex-1 whitespace-pre-wrap rounded-2xl rounded-tl-md bg-[#f4f7f9] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#273246]">{m.content}</div>
+            </div>
+          )
+        )}
+        {thinking && (
+          <div className="flex gap-2.5">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e9f6f6] text-[#058d80]"><Bot size={15} /></span>
+            <div className="flex items-center gap-1 rounded-2xl rounded-tl-md bg-[#f4f7f9] px-4 py-3">
+              {[0, 1, 2].map((d) => (
+                <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#98a3b8]" style={{ animationDelay: `${d * 0.15}s` }} />
+              ))}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+      <div className="pt-3">
+        {disabledHint ? (
+          <p className="rounded-xl bg-[#fff7e6] px-3 py-2.5 text-center text-[12.5px] font-medium text-[#b97f0f]">{disabledHint}</p>
+        ) : (
+          <div className="flex items-center gap-2 rounded-full border border-[#e1e6ec] bg-white py-1.5 pl-4 pr-1.5 shadow-sm transition focus-within:border-[#058d80]">
+            <input
+              className="h-8 w-full bg-transparent text-[13.5px] outline-none placeholder:text-[#a3a6aa]"
+              placeholder="Ask anything about this meeting…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={!draft.trim() || thinking}
+              aria-label="Send"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#058d80] text-white transition hover:bg-[#047a6e] disabled:opacity-30"
+            >
+              <ArrowUp size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [note, setNote] = useState<Note | null>(null);
@@ -74,8 +202,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<string | null>(null);
+  const [chat, setChat] = useState<ChatMsg[]>([]);
+  const [thinking, setThinking] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -174,208 +302,254 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     else showToast("Review failed");
   };
 
-  const ask = async () => {
-    if (!question.trim()) return;
-    setBusy(true);
-    setAnswer(null);
+  const sendChat = async (text: string) => {
+    const next = [...chat, { role: "user" as const, content: text }];
+    setChat(next);
+    setThinking(true);
     try {
       const res = await fetch(`/api/notetaker/notes/${id}/ask`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: text, history: next }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setAnswer(data.answer as string);
+      setChat([...next, { role: "assistant", content: data.answer as string }]);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Ask failed");
+      setChat([...next, { role: "assistant", content: `Sorry — ${err instanceof Error ? err.message : "that didn't work"}. Try again.` }]);
     } finally {
-      setBusy(false);
+      setThinking(false);
     }
   };
 
-  const askBox = (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-2">
-        <input
-          className="h-9 w-full rounded-lg border border-[#e1e6ec] bg-white px-2.5 text-[13px]"
-          placeholder="What salary did the candidate ask for?"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void ask();
-          }}
-        />
-        <button type="button" className="primary-button shrink-0" disabled={busy || !question.trim()} onClick={() => void ask()}>
-          Ask
-        </button>
+  const transcriptView = (lines: TLine[], clickable: boolean) => {
+    if (!note?.transcriptText) {
+      return (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <FileText size={22} className="text-[#c3cad4]" />
+          <p className="text-[13px] text-[#718096]">No transcript yet — it appears here once the bot records.</p>
+        </div>
+      );
+    }
+    if (lines.length === 0) return <p className="py-6 text-center text-[13px] text-[#718096]">No matches.</p>;
+    return (
+      <div className="flex flex-col">
+        {lines.map((l, idx) => (
+          <div
+            key={idx}
+            onClick={clickable && l.time ? () => seek(l.time) : undefined}
+            className={`flex gap-3 rounded-xl px-2.5 py-2 ${clickable && l.time ? "cursor-pointer transition hover:bg-[#f2faf9]" : ""}`}
+          >
+            {l.speaker ? (
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2f6] text-[11px] font-bold text-[#5f6c81]">
+                {initials(l.speaker)}
+              </span>
+            ) : (
+              <span className="w-8 shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2">
+                {l.speaker && <span className="text-[12.5px] font-semibold text-[#273246]">{l.speaker}</span>}
+                {l.time && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      seek(l.time);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2 py-0.5 text-[11px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white"
+                  >
+                    <CirclePlay size={11} /> {l.time}
+                  </button>
+                )}
+              </div>
+              <p className="mt-0.5 text-[13.5px] leading-relaxed text-[#3d4a61]">{l.text}</p>
+            </div>
+          </div>
+        ))}
       </div>
-      {answer && <p className="whitespace-pre-wrap rounded-lg bg-[#f8fafc] p-3 text-[13px] text-[#273246]">{answer}</p>}
-      {!note?.transcriptText && <p className="text-[13px] text-[#718096]">Add a transcript before asking.</p>}
-    </div>
-  );
+    );
+  };
 
-  const insightCards = (compact = false) => (
-    <div className="flex flex-col gap-2">
-      {(!note || note.insights.length === 0) && <p className="text-[13px] text-[#718096]">No insights yet.</p>}
-      {(note?.insights ?? []).map((i) => (
-        <div key={i.id} className={`rounded-lg border border-[#e9edf2] px-3 py-2.5 ${i.reviewStatus !== "PENDING" ? "opacity-60" : ""}`}>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#a3a6aa]">
-            {i.field.replace(/_/g, " ")}
-            {typeof i.confidence === "number" ? ` · ${Math.round(i.confidence * 100)}%` : ""}
-            {i.speaker ? ` · ${i.speaker}` : ""}
-          </p>
-          <p className="text-[13.5px] font-semibold text-[#273246]">{i.value}</p>
-          {i.evidence && <p className="mt-1 text-[12.5px] italic text-[#718096]">“{i.evidence}”</p>}
-          <div className="mt-1.5 flex items-center gap-2">
-            {i.timestamp && (
-              <button type="button" className="text-[12px] font-bold text-[#058d80] hover:underline" onClick={() => seek(i.timestamp!)}>
-                {i.timestamp} — play moment
+  const insightCards = () => (
+    <div className="flex flex-col gap-2.5">
+      {(!note || note.insights.length === 0) && (
+        <p className="py-6 text-center text-[13px] text-[#718096]">No insights yet — they appear after analysis.</p>
+      )}
+      {(note?.insights ?? []).map((ins) => (
+        <div key={ins.id} className={`rounded-xl border border-[#e9edf2] bg-[#fbfcfd] p-3.5 ${ins.reviewStatus !== "PENDING" ? "opacity-60" : ""}`}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#a3a6aa]">{ins.field.replace(/_/g, " ")}</p>
+            {typeof ins.confidence === "number" && (
+              <div className="flex items-center gap-1.5">
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#e9edf2]">
+                  <div className="h-full rounded-full bg-[#058d80]" style={{ width: `${Math.round(ins.confidence * 100)}%` }} />
+                </div>
+                <span className="text-[11px] font-bold text-[#058d80]">{Math.round(ins.confidence * 100)}%</span>
+              </div>
+            )}
+          </div>
+          <p className="mt-1 text-[14.5px] font-semibold text-[#273246]">{ins.value}</p>
+          {ins.speaker && <p className="mt-0.5 text-[12px] text-[#718096]">Said by {ins.speaker}</p>}
+          {ins.evidence && (
+            <p className="mt-2 flex gap-1.5 rounded-lg bg-white p-2.5 text-[12.5px] italic leading-relaxed text-[#5f6c81]">
+              <Quote size={13} className="mt-0.5 shrink-0 text-[#c3cad4]" />{ins.evidence}
+            </p>
+          )}
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {ins.timestamp && (
+              <button type="button" onClick={() => seek(ins.timestamp!)} className="inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2.5 py-1 text-[11.5px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white">
+                <CirclePlay size={12} /> {ins.timestamp}
               </button>
             )}
-            {i.reviewStatus === "PENDING" ? (
+            <span className="flex-1" />
+            {ins.reviewStatus === "PENDING" ? (
               <>
-                <button type="button" className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#178f84]" onClick={() => void review("insights", i.id, "ACCEPTED")}>
-                  <Check size={13} /> Accept
+                <button type="button" onClick={() => void review("insights", ins.id, "ACCEPTED")} className="inline-flex items-center gap-1 rounded-full bg-[#273246] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:bg-[#058d80]">
+                  <Check size={12} /> Accept
                 </button>
-                <button type="button" className="inline-flex items-center gap-1 text-[12px] text-[#718096]" onClick={() => void review("insights", i.id, "IGNORED")}>
-                  <X size={13} /> Ignore
+                <button type="button" onClick={() => void review("insights", ins.id, "IGNORED")} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-medium text-[#718096] transition hover:bg-[#f1f5f9]">
+                  <X size={12} /> Ignore
                 </button>
               </>
             ) : (
-              <span className="text-[11px] font-bold text-[#718096]">{i.reviewStatus}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#a3a6aa]">{ins.reviewStatus}</span>
             )}
           </div>
-          {compact ? null : null}
         </div>
       ))}
     </div>
   );
 
-  const actionCards = (
-    <div className="flex flex-col gap-2">
-      {(!note || note.actions.length === 0) && <p className="text-[13px] text-[#718096]">No suggested actions yet.</p>}
+  const actionCards = () => (
+    <div className="flex flex-col gap-2.5">
+      {(!note || note.actions.length === 0) && (
+        <p className="py-6 text-center text-[13px] text-[#718096]">No suggested actions yet.</p>
+      )}
       {(note?.actions ?? []).map((a) => (
-        <div key={a.id} className={`rounded-lg border border-[#e9edf2] px-3 py-2.5 ${a.reviewStatus !== "PENDING" ? "opacity-60" : ""}`}>
-          <p className="text-[13.5px] font-semibold text-[#273246]">{a.title}</p>
-          <p className="text-[12px] text-[#718096]">{[a.owner, a.dueDate, a.timestamp].filter(Boolean).join(" · ")}</p>
-          {a.evidence && <p className="mt-1 text-[12.5px] italic text-[#718096]">“{a.evidence}”</p>}
-          <div className="mt-1.5 flex items-center gap-2">
-            {a.timestamp && (
-              <button type="button" className="text-[12px] font-bold text-[#058d80] hover:underline" onClick={() => seek(a.timestamp!)}>
-                {a.timestamp} — play moment
-              </button>
-            )}
+        <div key={a.id} className={`rounded-xl border border-[#e9edf2] bg-[#fbfcfd] p-3.5 ${a.reviewStatus !== "PENDING" ? "opacity-60" : ""}`}>
+          <p className="text-[14px] font-semibold leading-snug text-[#273246]">{a.title}</p>
+          {(a.owner || a.dueDate || a.timestamp) && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {a.owner && <span className="rounded-full bg-[#eef2f6] px-2 py-0.5 text-[11px] font-semibold text-[#5f6c81]">{a.owner}</span>}
+              {a.dueDate && <span className="rounded-full bg-[#fff7e6] px-2 py-0.5 text-[11px] font-semibold text-[#b97f0f]">{a.dueDate}</span>}
+              {a.timestamp && (
+                <button type="button" onClick={() => seek(a.timestamp!)} className="inline-flex items-center gap-1 rounded-full bg-[#e9f6f6] px-2 py-0.5 text-[11px] font-bold text-[#058d80] transition hover:bg-[#058d80] hover:text-white">
+                  <CirclePlay size={11} /> {a.timestamp}
+                </button>
+              )}
+            </div>
+          )}
+          {a.evidence && (
+            <p className="mt-2 flex gap-1.5 rounded-lg bg-white p-2.5 text-[12.5px] italic leading-relaxed text-[#5f6c81]">
+              <Quote size={13} className="mt-0.5 shrink-0 text-[#c3cad4]" />{a.evidence}
+            </p>
+          )}
+          <div className="mt-2.5 flex items-center gap-2">
+            <span className="flex-1" />
             {a.reviewStatus === "PENDING" ? (
               <>
-                <button type="button" className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#178f84]" onClick={() => void review("actions", a.id, "CREATED_TASK")}>
-                  <Check size={13} /> Create task
+                <button type="button" onClick={() => void review("actions", a.id, "CREATED_TASK")} className="inline-flex items-center gap-1 rounded-full bg-[#273246] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:bg-[#058d80]">
+                  <Check size={12} /> Create task
                 </button>
-                <button type="button" className="inline-flex items-center gap-1 text-[12px] text-[#718096]" onClick={() => void review("actions", a.id, "IGNORED")}>
-                  <X size={13} /> Ignore
+                <button type="button" onClick={() => void review("actions", a.id, "IGNORED")} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-medium text-[#718096] transition hover:bg-[#f1f5f9]">
+                  <X size={12} /> Ignore
                 </button>
               </>
             ) : (
-              <span className="text-[11px] font-bold text-[#718096]">{a.reviewStatus}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#a3a6aa]">{a.reviewStatus}</span>
             )}
           </div>
         </div>
       ))}
-    </div>
-  );
-
-  const transcriptView = (lines: TLine[], clickable: boolean) => (
-    <div>
-      {!note?.transcriptText ? (
-        <p className="text-[13px] text-[#718096]">No transcript yet.</p>
-      ) : (
-        <div className="flex max-h-[52vh] flex-col gap-1 overflow-auto pr-1">
-          {lines.length === 0 && <p className="text-[13px] text-[#718096]">No matches.</p>}
-          {lines.map((l, idx) => (
-            <div key={idx} className={`rounded-md px-2 py-1 text-[13px] ${clickable && l.time ? "cursor-pointer hover:bg-[#e9f6f6]" : ""}`}
-              onClick={clickable && l.time ? () => seek(l.time) : undefined}>
-              {l.time && <span className="mr-1.5 font-bold text-[#058d80]">{l.time}</span>}
-              {l.speaker && <span className="mr-1.5 font-semibold text-[#273246]">{l.speaker}:</span>}
-              <span className="text-[#273246]">{l.text}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 
   if (!note) {
     return (
       <div className="flex h-full flex-col">
-        <Header kicker={<span className="inline-flex items-center gap-2"><Mic size={16} /> AI Notetaker</span>} />
-        <p className="p-6 text-[13.5px] text-[#718096]">Loading…</p>
+        <Header kicker="AI Notetaker" />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex items-center gap-2 text-[13.5px] text-[#718096]">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#e1e6ec] border-t-[#058d80]" /> Loading note…
+          </div>
+        </div>
       </div>
     );
   }
 
   const lines = transcriptLines(note, search);
   const watchLines = transcriptLines(note, watchSearch);
+  const noTranscriptHint = !note.transcriptText ? "Add a transcript first — paste one in the Watch tab." : null;
 
   return (
     <div className="flex h-full flex-col">
-      <Header kicker={<span className="inline-flex items-center gap-2"><Mic size={16} /> AI Notetaker</span>} />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 overflow-y-auto p-4 md:p-6">
-        <Link href="/dashboard/notetaker" className="inline-flex items-center gap-1 text-[13px] text-[#718096] hover:text-[#273246]">
+      <Header kicker="AI Notetaker" />
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto p-4 md:p-6">
+        <Link href="/dashboard/notetaker" className="inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-[#718096] transition hover:text-[#273246]">
           <ArrowLeft size={14} /> All notes
         </Link>
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h1 className="text-[19px] font-semibold text-[#273246]">{note.event.summary}</h1>
-            <p className="text-[13px] text-[#718096]">
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-[20px] font-semibold tracking-tight text-[#273246]">{note.event.summary}</h1>
+              <StatusChip status={note.status} />
+            </div>
+            <p className="mt-1 text-[13px] text-[#718096]">
               {note.event.eventType ?? "Meeting"} · {new Date(note.event.start).toLocaleString()}
               {note.templateUsed ? ` · ${note.templateUsed} template` : ""}
             </p>
-            <p className="mt-0.5 text-[12px] text-[#718096]">
-              {note.event.attendees.map((a) => `${a.name ?? a.email}${a.type ? ` (${a.type})` : ""}`).join(" · ")}
-            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {note.event.attendees.map((a) => (
+                <span key={a.email} className="inline-flex items-center gap-1.5 rounded-full bg-[#f1f5f9] py-1 pl-1 pr-2.5 text-[12px] font-medium text-[#3d4a61]">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[9px] font-bold text-[#058d80]">{initials(a.name ?? a.email)}</span>
+                  {a.name ?? a.email}
+                  {a.type && <span className="text-[#a3a6aa]">· {a.type}</span>}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <StatusChip status={note.status} />
-            {note.transcriptText && (
-              <button type="button" className="text-button" disabled={busy} onClick={() => void reanalyze()}>
-                Re-analyze
-              </button>
-            )}
-          </div>
+          {note.transcriptText && (
+            <button type="button" className="text-button" disabled={busy} onClick={() => void reanalyze()}>
+              Re-analyze
+            </button>
+          )}
         </div>
-        {note.statusMessage && (
-          <div className="sync-banner" style={{ margin: 0 }}>
-            <div><Mic size={15} /><span>{note.statusMessage}</span></div>
-          </div>
-        )}
 
-        <div className="flex flex-wrap gap-1 border-b border-[#e9edf2]">
+        <div className="flex w-fit items-center gap-1 rounded-full border border-[#e9edf2] bg-white p-1">
           {TABS.map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`px-3 py-2 text-[13.5px] font-semibold transition ${
-                tab === t ? "border-b-2 border-[#058d80] text-[#058d80]" : "text-[#718096] hover:text-[#273246]"
+              className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                tab === t ? "bg-[#273246] text-white shadow-sm" : "text-[#718096] hover:text-[#273246]"
               }`}
             >
               {t}
-              {t === "Insights" && note.insights.length > 0 ? ` (${note.insights.length})` : ""}
-              {t === "Actions" && note.actions.length > 0 ? ` (${note.actions.length})` : ""}
+              {t === "Insights" && note.insights.length > 0 ? ` · ${note.insights.length}` : ""}
+              {t === "Actions" && note.actions.length > 0 ? ` · ${note.actions.length}` : ""}
             </button>
           ))}
         </div>
 
+        {note.statusMessage && (
+          <div className="sync-banner" style={{ margin: 0 }}>
+            <div><Sparkles size={15} /><span>{note.statusMessage}</span></div>
+          </div>
+        )}
+
         {tab === "Watch" && (
-          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div className="grid items-start gap-4 lg:grid-cols-[1fr_370px]">
             <div className="flex min-w-0 flex-col gap-4">
-              <section className="overflow-hidden rounded-xl border border-[#e9edf2] bg-[#242e45]">
+              <div className="overflow-hidden rounded-2xl bg-[#242e45] shadow-sm">
                 {videoUrl ? (
                   <video ref={videoRef} controls className="aspect-video w-full" src={videoUrl} />
                 ) : (
-                  <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 p-6 text-center">
-                    <MonitorPlay size={28} className="text-[#98a3b8]" />
-                    <p className="text-[13.5px] text-[#d6dbe5]">
+                  <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 p-6 text-center">
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-[#d6dbe5]"><MonitorPlay size={24} /></span>
+                    <p className="max-w-sm text-[13.5px] leading-relaxed text-[#d6dbe5]">
                       {videoError ?? (note.recallRecordingId ? "Loading recording…" : "No recording yet — the video appears here after the bot records the Meet.")}
                     </p>
                     {note.recallRecordingId && (
@@ -383,116 +557,112 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                     )}
                   </div>
                 )}
-              </section>
-              <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-                <h2 className="text-[15px] font-semibold text-[#273246]">Summary</h2>
-                <div className="mt-2">{!note.summary ? <p className="text-[13px] text-[#718096]">No summary yet.</p> : <SummaryView summary={note.summary} />}</div>
-              </section>
-              <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-                <h2 className="text-[15px] font-semibold text-[#273246]">Suggested actions</h2>
-                <div className="mt-2">{actionCards}</div>
-              </section>
+              </div>
+              <Section icon={<FileText size={15} className="text-[#058d80]" />} title="Summary">
+                {!note.summary
+                  ? <p className="text-[13px] text-[#718096]">No summary yet — paste a transcript below to generate one.</p>
+                  : <SummaryView summary={note.summary} />}
+                {!note.transcriptText && (
+                  <div className="mt-3">
+                    <textarea
+                      className="min-h-24 w-full rounded-xl border border-[#e1e6ec] bg-white p-3 text-[13px] outline-none placeholder:text-[#a3a6aa] focus:border-[#058d80]"
+                      placeholder="[00:00:05] Recruiter: …"
+                      value={paste}
+                      onChange={(e) => setPaste(e.target.value)}
+                    />
+                    <button type="button" className="primary-button mt-2" disabled={busy || !paste.trim()} onClick={() => void submitTranscript()}>
+                      Save & analyze
+                    </button>
+                  </div>
+                )}
+              </Section>
+              <Section icon={<ListChecks size={15} className="text-[#058d80]" />} title="Suggested actions">
+                {actionCards()}
+              </Section>
             </div>
-            <aside className="flex min-h-0 flex-col rounded-xl border border-[#e9edf2] bg-white">
-              <div className="flex gap-1 border-b border-[#e9edf2] px-2 pt-2">
+            <aside className="flex max-h-[calc(100vh-220px)] min-h-[480px] flex-col rounded-2xl border border-[#e9edf2] bg-white lg:sticky lg:top-0">
+              <div className="flex gap-1 border-b border-[#eef1f5] px-3 pt-2.5">
                 {(["transcript", "insights", "ask"] as const).map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => setWatchSide(s)}
-                    className={`rounded-t-lg px-3 py-2 text-[13px] font-semibold capitalize ${watchSide === s ? "bg-[#e9f6f6] text-[#058d80]" : "text-[#718096] hover:text-[#273246]"}`}
+                    className={`rounded-t-lg px-3 py-2 text-[13px] font-semibold capitalize transition ${
+                      watchSide === s ? "bg-[#e9f6f6] text-[#058d80]" : "text-[#718096] hover:text-[#273246]"
+                    }`}
                   >
                     {s === "ask" ? "Ask AI" : s}
                   </button>
                 ))}
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
                 {watchSide === "transcript" && (
-                  <div className="flex flex-col gap-2">
+                  <div className="relative mb-2">
+                    <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a6aa]" />
                     <input
-                      className="h-9 w-full rounded-lg border border-[#e1e6ec] bg-white px-2.5 text-[13px]"
+                      className="h-9 w-full rounded-full border border-[#e1e6ec] bg-white pl-8 pr-3 text-[13px] outline-none placeholder:text-[#a3a6aa] focus:border-[#058d80]"
                       placeholder="Search — click a line to seek…"
                       value={watchSearch}
                       onChange={(e) => setWatchSearch(e.target.value)}
                     />
-                    {transcriptView(watchLines, true)}
                   </div>
                 )}
-                {watchSide === "insights" && insightCards(true)}
-                {watchSide === "ask" && askBox}
+                {watchSide === "transcript" && transcriptView(watchLines, true)}
+                {watchSide === "insights" && insightCards()}
+                {watchSide === "ask" && (
+                  <ChatPanel messages={chat} thinking={thinking} onSend={(t) => void sendChat(t)} disabledHint={noTranscriptHint} />
+                )}
               </div>
             </aside>
           </div>
         )}
 
-        {tab === "Recording" && (
-          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-[#273246]">Capture</h2>
-            <div className="mt-2 flex flex-col gap-2 text-[13.5px] text-[#273246]">
-              <p>Source: <span className="font-semibold">{note.source}</span></p>
-              {note.recallBotId && <p className="text-[#718096]">Bot: {note.recallBotId}</p>}
-              {note.status === "JOINING" && (
-                <div className="sync-banner" style={{ margin: 0 }}>
-                  <div><Mic size={15} /><span>If the bot is stuck here, open the Meet and admit “Wiggli Notetaker” from the waiting room.</span></div>
-                </div>
-              )}
-              <div className="mt-1">
-                <p className="mb-1 font-semibold">Paste a transcript to test the AI without a bot:</p>
-                <textarea
-                  className="min-h-32 w-full rounded-lg border border-[#e1e6ec] bg-white p-2.5 text-[13px]"
-                  placeholder="[00:00:05] Recruiter: …"
-                  value={paste}
-                  onChange={(e) => setPaste(e.target.value)}
-                />
-                <button type="button" className="primary-button mt-2" disabled={busy || !paste.trim()} onClick={() => void submitTranscript()}>
-                  Save & analyze
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
-
         {tab === "Transcript" && (
-          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-[#273246]">Transcript</h2>
-            <div className="mt-2 flex flex-col gap-2">
-              <input
-                className="h-9 w-full rounded-lg border border-[#e1e6ec] bg-white px-2.5 text-[13px]"
-                placeholder="Search transcript…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {transcriptView(lines, false)}
-            </div>
-          </section>
+          <Section
+            icon={<FileText size={15} className="text-[#058d80]" />}
+            title={`Transcript${lines.length > 0 ? ` · ${lines.length} lines` : ""}`}
+            action={
+              <div className="relative w-56">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a6aa]" />
+                <input
+                  className="h-8.5 w-full rounded-full border border-[#e1e6ec] bg-white py-1.5 pl-8 pr-3 text-[12.5px] outline-none placeholder:text-[#a3a6aa] focus:border-[#058d80]"
+                  placeholder="Search…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            }
+          >
+            <div className="max-h-[60vh] overflow-y-auto">{transcriptView(lines, false)}</div>
+          </Section>
         )}
 
         {tab === "Summary" && (
-          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-[#273246]">AI summary</h2>
-            <div className="mt-2">{!note.summary ? <p className="text-[13px] text-[#718096]">No summary yet — add a transcript first.</p> : <SummaryView summary={note.summary} />}</div>
-          </section>
+          <Section icon={<FileText size={15} className="text-[#058d80]" />} title="AI summary">
+            {!note.summary
+              ? <p className="text-[13px] text-[#718096]">No summary yet — add a transcript first.</p>
+              : <SummaryView summary={note.summary} />}
+          </Section>
         )}
 
         {tab === "Insights" && (
-          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-[#273246]">Candidate insights</h2>
-            <div className="mt-2">{insightCards()}</div>
-          </section>
+          <Section icon={<Sparkles size={15} className="text-[#058d80]" />} title={`Candidate insights${note.insights.length > 0 ? ` · ${note.insights.length}` : ""}`}>
+            {insightCards()}
+          </Section>
         )}
 
         {tab === "Actions" && (
-          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-[#273246]">Suggested actions</h2>
-            <div className="mt-2">{actionCards}</div>
-          </section>
+          <Section icon={<ListChecks size={15} className="text-[#058d80]" />} title={`Suggested actions${note.actions.length > 0 ? ` · ${note.actions.length}` : ""}`}>
+            {actionCards()}
+          </Section>
         )}
 
         {tab === "Ask AI" && (
-          <section className="rounded-xl border border-[#e9edf2] bg-white p-4">
-            <h2 className="text-[15px] font-semibold text-[#273246]">Ask about this meeting</h2>
-            <div className="mt-2">{askBox}</div>
-          </section>
+          <Section icon={<Sparkles size={15} className="text-[#058d80]" />} title="Ask about this meeting">
+            <div className="flex h-[55vh] min-h-[380px] flex-col">
+              <ChatPanel messages={chat} thinking={thinking} onSend={(t) => void sendChat(t)} disabledHint={noTranscriptHint} />
+            </div>
+          </Section>
         )}
       </div>
     </div>

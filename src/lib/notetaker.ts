@@ -174,9 +174,14 @@ export async function askOverTranscript(args: {
   question: string;
   transcriptText: string;
   summary: unknown;
+  history?: { role: "user" | "assistant"; content: string }[];
 }): Promise<string> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("Missing GEMINI_API_KEY.");
+  const historyBlock = (args.history ?? [])
+    .slice(-8)
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
   const response = await fetch(`${API_ROOT}/${MODEL}:generateContent?key=${key}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -186,7 +191,7 @@ export async function askOverTranscript(args: {
           role: "user",
           parts: [
             {
-              text: `Answer ONLY from this meeting transcript + summary. Quote evidence with timestamps. If the answer is not in the transcript, say so.\n\nSummary:\n${JSON.stringify(args.summary)}\n\nTranscript:\n${args.transcriptText}\n\nQuestion: ${args.question}`,
+              text: `Answer ONLY from this meeting transcript + summary. Quote evidence with timestamps. If the answer is not in the transcript, say so.\n\nSummary:\n${JSON.stringify(args.summary)}\n\nTranscript:\n${args.transcriptText}\n\n${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}Question: ${args.question}`,
             },
           ],
         },
