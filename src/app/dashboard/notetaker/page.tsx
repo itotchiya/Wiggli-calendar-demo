@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CalendarPlus, Mic, PlayCircle, RefreshCw, Search, Video } from "lucide-react";
+import { Bot, CalendarPlus, Mic, PlayCircle, RefreshCw, Search, Video } from "lucide-react";
 import { Header } from "@/components/chrome";
 import { StatusChip } from "@/components/notetaker-ui";
 import { showToast } from "@/components/toaster";
@@ -32,6 +32,10 @@ export default function NotetakerPage() {
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [events, setEvents] = useState<EventDto[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testUrl, setTestUrl] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [loading, setLoading] = useState(true);
@@ -81,6 +85,30 @@ export default function NotetakerPage() {
     }
   };
 
+  const testJoin = async () => {
+    if (!testUrl.trim() || testBusy) return;
+    setTestBusy(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/notetaker/test-join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ meetingUrl: testUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const botId = String(data.bot?.id ?? "unknown");
+      setTestResult(`Bot sent — id ${botId}. Open the Meet now and admit “Wiggli Notetaker” from the lobby.`);
+      showToast("Test bot sent — admit it in the Meet.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Test join failed";
+      setTestResult(msg);
+      showToast(msg);
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return notes.filter((n) => {
@@ -110,6 +138,9 @@ export default function NotetakerPage() {
           <div className="flex items-center gap-2">
             <button type="button" className="icon-button" title="Refresh" onClick={() => void load()}>
               <RefreshCw size={16} />
+            </button>
+            <button type="button" className="text-button" onClick={() => { setTestOpen(true); setTestResult(null); }}>
+              <Bot size={15} /> Test join
             </button>
             <button type="button" className="primary-button" onClick={() => setPickerOpen(true)}>
               <CalendarPlus size={15} /> New note
@@ -183,6 +214,35 @@ export default function NotetakerPage() {
                 <StatusChip status={n.status} />
               </Link>
             ))}
+          </div>
+        )}
+
+        {testOpen && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" onClick={() => setTestOpen(false)}>
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <p className="text-[15px] font-semibold text-[#273246]">Test join</p>
+              <p className="mt-0.5 text-[12.5px] text-[#718096]">
+                Paste a Google Meet link — the bot joins right now, no event needed. Join the same Meet yourself and admit “Wiggli Notetaker”.
+              </p>
+              <input
+                className="mt-3 h-10 w-full rounded-xl border border-[#e1e6ec] bg-white px-3 text-[13px] outline-none placeholder:text-[#a3a6aa] focus:border-[#058d80]"
+                placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                value={testUrl}
+                onChange={(e) => setTestUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void testJoin();
+                }}
+              />
+              {testResult && (
+                <p className="mt-2 rounded-xl bg-[#f4f7f9] p-3 text-[12.5px] leading-relaxed text-[#273246]">{testResult}</p>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <button type="button" className="text-button" onClick={() => setTestOpen(false)}>Close</button>
+                <button type="button" className="primary-button" disabled={testBusy || !testUrl.trim()} onClick={() => void testJoin()}>
+                  <Bot size={15} /> {testBusy ? "Sending…" : "Send bot now"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
