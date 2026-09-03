@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import {
   createAsyncTranscript,
@@ -60,8 +60,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Ack immediately per Recall guide; heavy work continues without blocking the response.
-  void processRecallEvent(payload).catch((err) => console.error("[notetaker:webhook] background error:", err));
+  // Ack immediately per Recall guide; heavy work runs after the response
+  // via `after()` so serverless doesn't freeze it mid-flight.
+  after(() => {
+    processRecallEvent(payload).catch((err) => console.error("[notetaker:webhook] background error:", err));
+  });
   return NextResponse.json({ ok: true });
 }
 

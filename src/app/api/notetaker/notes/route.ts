@@ -63,7 +63,13 @@ export async function POST(req: Request) {
       }
       const bot = await createNotetakerBot({
         meetingUrl,
-        joinAt: new Date().toISOString(), // join now (test); scheduling by start time comes next
+        // Scheduled bot per Recall guide: join at the event start so the bot
+        // is there when the meeting begins (not at creation time). "Now" when
+        // the start already passed or is < 2 min away (live test).
+        joinAt:
+          event.start.getTime() - Date.now() > 2 * 60 * 1000
+            ? event.start.toISOString()
+            : new Date().toISOString(),
         eventId: event.id,
       });
       const note = await db.meetingNote.create({

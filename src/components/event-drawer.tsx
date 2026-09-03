@@ -2015,7 +2015,10 @@ export function EventDrawer({
       showToast(`${title.trim()} created — ${resendRsvpMode ? "Resend RSVP invitations" : "Google event"}${created.hangoutLink ? " + Meet link" : ""} synced`);
       // AI Notetaker hook: schedule the Recall bot on the created event (fire-and-forget).
       // Reads the "Wiggli Notetaker" toggle from the Online location section.
-      if (locationSnapshot?.aiNotetaker && created.id) {
+      if (locationSnapshot?.aiNotetaker) {
+        if (!created.id) {
+          showToast("AI Notetaker skipped — created event has no id.");
+        } else {
         const eventId = String(created.id);
         if (locationSnapshot.provider !== "google") {
           showToast("AI Notetaker needs Google Meet as the meeting provider for now.");
@@ -2031,6 +2034,7 @@ export function EventDrawer({
             showToast("AI Notetaker scheduled — admit “Wiggli Notetaker” in the Meet.");
           })
           .catch((noteErr) => showToast(`Notetaker failed: ${noteErr instanceof Error ? noteErr.message : "unknown error"}`));
+        }
         }
       }
       window.setTimeout(() => {
