@@ -24,7 +24,6 @@ import {
   Map,
   MapPin,
   MessageSquareText,
-  Mic,
   Monitor,
   Loader2,
   PenLine,
@@ -1033,13 +1032,13 @@ function EventLocation({ open, required, onOpen, onRemove, showError = false, on
           </>}
         </div>
       )}
-      {false && locationType === "online" && open && (
+      {locationType === "online" && open && (
         <div className="location-card" style={{ marginTop: 12, padding: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#334158", fontWeight: 500 }}><span style={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g clipPath="url(#clip0_359_159930)"><path d="M10.4016 3.78516L12.0547 8.08305C12.2864 8.68548 12.4022 8.98669 12.5824 9.24006C12.742 9.46461 12.9382 9.66081 13.1628 9.82048C13.4162 10.0006 13.7174 10.1165 14.3198 10.3482L18.6177 12.0012L14.3198 13.6543C13.7174 13.886 13.4162 14.0018 13.1628 14.182C12.9382 14.3416 12.742 14.5378 12.5824 14.7624C12.4022 15.0158 12.2864 15.317 12.0547 15.9194L10.4016 20.2173L8.74858 15.9194C8.51688 15.317 8.40103 15.0158 8.22087 14.7624C8.0612 14.5378 7.865 14.3416 7.64045 14.182C7.38708 14.0018 7.08587 13.886 6.48344 13.6543L2.18555 12.0012L6.48344 10.3482C7.08587 10.1165 7.38708 10.0006 7.64045 9.82048C7.865 9.66081 8.0612 9.46461 8.22087 9.24006C8.40103 8.98669 8.51688 8.68548 8.74858 8.08305L10.4016 3.78516Z" fill="#00CB24" stroke="#00CB24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.6176 2.73438L19.1796 4.19561C19.2584 4.40043 19.2978 4.50284 19.359 4.58898C19.4133 4.66532 19.48 4.73203 19.5563 4.78631C19.6425 4.84756 19.7449 4.88695 19.9497 4.96573L21.4109 5.52774L19.9497 6.08975C19.7449 6.16853 19.6425 6.20792 19.5563 6.26917C19.48 6.32346 19.4133 6.39016 19.359 6.4665C19.2978 6.55265 19.2584 6.65505 19.1796 6.85987L18.6176 8.32111L18.0556 6.85987C17.9768 6.65505 17.9374 6.55265 17.8762 6.4665C17.8219 6.39016 17.7552 6.32346 17.6788 6.26917C17.5927 6.20792 17.4903 6.16853 17.2855 6.08975L15.8242 5.52774L17.2855 4.96573C17.4903 4.88695 17.5927 4.84756 17.6788 4.78631C17.7552 4.73203 17.8219 4.66532 17.8762 4.58898C17.9374 4.50283 17.9768 4.40043 18.0556 4.19561L18.6176 2.73438Z" fill="#00CB24" stroke="#00CB24" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.5676 17.1523L18.8457 17.8753C18.8847 17.9767 18.9042 18.0273 18.9345 18.0699C18.9613 18.1077 18.9943 18.1407 19.0321 18.1676C19.0747 18.1979 19.1254 18.2174 19.2267 18.2564L19.9497 18.5344L19.2267 18.8125C19.1254 18.8515 19.0747 18.871 19.0321 18.9013C18.9943 18.9281 18.9613 18.9611 18.9345 18.9989C18.9042 19.0415 18.8847 19.0922 18.8457 19.1935L18.5676 19.9165L18.2896 19.1935C18.2506 19.0922 18.2311 19.0415 18.2008 18.9989C18.1739 18.9611 18.1409 18.9281 18.1032 18.9013C18.0605 18.871 18.0099 18.8515 17.9085 18.8125L17.1855 18.5344L17.9085 18.2564C18.0099 18.2174 18.0605 18.1979 18.1032 18.1676C18.1409 18.1407 18.1739 18.1077 18.2008 18.0699C18.2311 18.0273 18.2506 17.9767 18.2896 17.8753L18.5676 17.1523Z" fill="#00CB24" stroke="#00CB24" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round"/></g><defs><clipPath id="clip0_359_159930"><rect width="24" height="24" fill="white"/></clipPath></defs></svg></span> Wiggli AI Notetaker</span>
-            <p style={{ fontSize: 12, color: "#8da0b9", margin: 0, lineHeight: 1.4 }}>AI notetaker will join at the scheduled time to take notes</p>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#334158", fontWeight: 500 }}><span style={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g clipPath="url(#clip0_359_159930)"><path d="M10.4016 3.78516L12.0547 8.08305C12.2864 8.68548 12.4022 8.98669 12.5824 9.24006C12.742 9.46461 12.9382 9.66081 13.1628 9.82048C13.4162 10.0006 13.7174 10.1165 14.3198 10.3482L18.6177 12.0012L14.3198 13.6543C13.7174 13.886 13.4162 14.0018 13.1628 14.182C12.9382 14.3416 12.742 14.5378 12.5824 14.7624C12.4022 15.0158 12.2864 15.317 12.0547 15.9194L10.4016 20.2173L8.74858 15.9194C8.51688 15.317 8.40103 15.0158 8.22087 14.7624C8.0612 14.5378 7.865 14.3416 7.64045 14.182C7.38708 14.0018 7.08587 13.886 6.48344 13.6543L2.18555 12.0012L6.48344 10.3482C7.08587 10.1165 7.38708 10.0006 7.64045 9.82048C7.865 9.66081 8.0612 9.46461 8.22087 9.24006C8.40103 8.98669 8.51688 8.68548 8.74858 8.08305L10.4016 3.78516Z" fill="#00CB24" stroke="#00CB24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.6176 2.73438L19.1796 4.19561C19.2584 4.40043 19.2978 4.50284 19.359 4.58898C19.4133 4.66532 19.48 4.73203 19.5563 4.78631C19.6425 4.84756 19.7449 4.88695 19.9497 4.96573L21.4109 5.52774L19.9497 6.08975C19.7449 6.16853 19.6425 6.20792 19.5563 6.26917C19.48 6.32346 19.4133 6.39016 19.359 6.4665C19.2978 6.55265 19.2584 6.65505 19.1796 6.85987L18.6176 8.32111L18.0556 6.85987C17.9768 6.65505 17.9374 6.55265 17.8762 6.4665C17.8219 6.39016 17.7552 6.32346 17.6788 6.26917C17.5927 6.20792 17.4903 6.16853 17.2855 6.08975L15.8242 5.52774L17.2855 4.96573C17.4903 4.88695 17.5927 4.84756 17.6788 4.78631C17.7552 4.73203 17.8219 4.66532 17.8762 4.58898C17.9374 4.50283 17.9768 4.40043 18.0556 4.19561L18.6176 2.73438Z" fill="#00CB24" stroke="#00CB24" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.5676 17.1523L18.8457 17.8753C18.8847 17.9767 18.9042 18.0273 18.9345 18.0699C18.9613 18.1077 18.9943 18.1407 19.0321 18.1676C19.0747 18.1979 19.1254 18.2174 19.2267 18.2564L19.9497 18.5344L19.2267 18.8125C19.1254 18.8515 19.0747 18.871 19.0321 18.9013C18.9943 18.9281 18.9613 18.9611 18.9345 18.9989C18.9042 19.0415 18.8847 19.0922 18.8457 19.1935L18.5676 19.9165L18.2896 19.1935C18.2506 19.0922 18.2311 19.0415 18.2008 18.9989C18.1739 18.9611 18.1409 18.9281 18.1032 18.9013C18.0605 18.871 18.0099 18.8515 17.9085 18.8125L17.1855 18.5344L17.9085 18.2564C18.0099 18.2174 18.0605 18.1979 18.1032 18.1676C18.1409 18.1407 18.1739 18.1077 18.2008 18.0699C18.2311 18.0273 18.2506 17.9767 18.2896 17.8753L18.5676 17.1523Z" fill="#00CB24" stroke="#00CB24" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round"/></g><defs><clipPath id="clip0_359_159930"><rect width="24" height="24" fill="white"/></clipPath></defs></svg></span> Wiggli Notetaker</span>
+            <p style={{ fontSize: 12, color: "#8da0b9", margin: 0, lineHeight: 1.4 }}>The AI notetaker joins at the meeting time — admit it from the lobby to start recording.</p>
           </div>
-          <Toggle on={aiNotetaker} onClick={() => setAiNotetaker((v) => !v)} label="Wiggli AI Notetaker" />
+          <Toggle on={aiNotetaker} onClick={() => setAiNotetaker((v) => !v)} label="Wiggli Notetaker" />
         </div>
       )}
       {open && showError && !locationValid && <p className="field-error"><FieldErrorIcon /> Please enter a valid address</p>}
@@ -1218,7 +1217,6 @@ export function EventDrawer({
   const [eventTypeMenuOpen, setEventTypeMenuOpen] = useState(false);
   const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
   const [sending, setSending] = useState(false);
-  const [notetakerEnabled, setNotetakerEnabled] = useState(false);
 
   // Step 2 Invitation States
   const [activeInviteTab, setActiveInviteTab] = useState<"candidate" | "contact" | "internal">("candidate");
@@ -2016,9 +2014,12 @@ export function EventDrawer({
       onCreate(title.trim(), getOccurrences(), draftIsBeingScheduled ? { ...buildMeta(), status: "SCHEDULED" } : buildMeta());
       showToast(`${title.trim()} created — ${resendRsvpMode ? "Resend RSVP invitations" : "Google event"}${created.hangoutLink ? " + Meet link" : ""} synced`);
       // AI Notetaker hook: schedule the Recall bot on the created event (fire-and-forget).
-      if (notetakerEnabled && created.id) {
+      // Reads the "Wiggli Notetaker" toggle from the Online location section.
+      if (locationSnapshot?.aiNotetaker && created.id) {
         const eventId = String(created.id);
-        setNotetakerEnabled(false);
+        if (locationSnapshot.provider !== "google") {
+          showToast("AI Notetaker needs Google Meet as the meeting provider for now.");
+        } else {
         void fetch("/api/notetaker/notes", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -2030,6 +2031,7 @@ export function EventDrawer({
             showToast("AI Notetaker scheduled — admit “Wiggli Notetaker” in the Meet.");
           })
           .catch((noteErr) => showToast(`Notetaker failed: ${noteErr instanceof Error ? noteErr.message : "unknown error"}`));
+        }
       }
       window.setTimeout(() => {
         if (recipients.length === 1) showToast(`Personalized invitation emailed to ${recipients[0].name}`);
@@ -2457,10 +2459,6 @@ export function EventDrawer({
             <div className="drawer-footer">
               <button className="text-button" onClick={onClose}>Cancel</button>
               <div>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 10, fontSize: 13, cursor: "pointer" }} title="Recall bot joins the Google Meet, records, transcribes and drafts AI notes.">
-                  <input type="checkbox" checked={notetakerEnabled} onChange={(e) => setNotetakerEnabled(e.target.checked)} disabled={sending} />
-                  <Mic size={14} /> AI Notetaker
-                </label>
                 <button className="back-step-button" type="button" onClick={() => setDrawerStep(1)}>
                   <ChevronLeft size={16} /> Back
                 </button>
