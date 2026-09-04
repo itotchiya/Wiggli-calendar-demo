@@ -19,9 +19,9 @@ export async function GET(req: Request) {
 
 /**
  * POST { meetingUrl, eventId? }: fire a test bot at any Meet URL right now.
- * No event needed for a pure connectivity test. Pass eventId to attach the
- * bot to that event's note — then the full pipeline runs (record → transcript
- * → summary) and everything lands on the note like a normal event.
+ * No eventId → a lightweight "Test meeting" event + note are auto-created, so
+ * a fresh recording still ends with transcript + summary on its own note.
+ * Pass eventId to attach the bot to an existing event's note instead.
  */
 export async function POST(req: Request) {
   const session = await auth();
@@ -53,6 +53,29 @@ export async function POST(req: Request) {
       const note =
         existing ??
         (await db.meetingNote.create({ data: { eventId: event.id, source: "RECALL_BOT", status: "JOINING" } }));
+      noteId = note.id;
+    } else {
+      // Fresh test meeting: auto-create a minimal event + note so the recording
+      // gets the full pipeline (transcript → summary) with no calendar setup.
+      const now = new Date();
+      const stamp = now.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      const autoEvent = await db.event.create({
+        data: {
+          iCalUID: `test-${Date.now()}@wiggli.local`,
+          summary: `Test meeting — ${stamp}`,
+          eventType: "Meeting",
+          start: now,
+          end: new Date(now.getTime() + 30 * 60 * 1000),
+          timezone: "UTC",
+          organizerEmail: session.user.email!.toLowerCase(),
+          hangoutLink: meetingUrl,
+          status: "SCHEDULED",
+        },
+      });
+      metaEventId = autoEvent.id;
+      const note = await db.meetingNote.create({
+        data: { eventId: autoEvent.id, source: "RECALL_BOT", status: "JOINING" },
+      });
       noteId = note.id;
     }
     const bot = await createNotetakerBot({

@@ -82,7 +82,8 @@ export default function NotetakerPage() {
     try {
       const res = await fetch("/api/events");
       const data = await res.json();
-      setEvents(data.events ?? []);
+      // GET /api/events returns a bare array (listEvents), not { events }.
+      setEvents(Array.isArray(data) ? data : data.events ?? []);
     } catch {
       /* picker stays empty */
     }
@@ -365,7 +366,7 @@ export default function NotetakerPage() {
               <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <p className="flex items-center gap-2 text-[16px] font-semibold text-slate-800"><Bot size={18} className="text-teal-700" /> Test join</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
-                  Paste a Google Meet link — the bot joins right now, no event needed. Join the same Meet yourself and admit “Wiggli Notetaker”.
+                  Paste a Google Meet link — the bot joins right now. Join the same Meet yourself and admit “Wiggli Notetaker”.
                 </p>
                 <input
                   className="mt-4 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-[13.5px] outline-none placeholder:text-slate-400 focus:border-teal-600 focus:bg-white"
@@ -392,14 +393,14 @@ export default function NotetakerPage() {
                   </div>
                 )}
                 <label className="mt-3 block text-[12px] font-semibold text-slate-500">
-                  Attach to event <span className="font-normal">(optional — needed for the summary)</span>
+                  Attach to event <span className="font-normal">(optional)</span>
                 </label>
                 <select
                   className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[13px] outline-none focus:border-teal-600 focus:bg-white"
                   value={testEventId}
                   onChange={(e) => setTestEventId(e.target.value)}
                 >
-                  <option value="">No event — connectivity test only</option>
+                  <option value="">Fresh test — auto-create a meeting note</option>
                   {events.map((e) => (
                     <option key={e.id} value={e.id}>{e.summary}</option>
                   ))}
