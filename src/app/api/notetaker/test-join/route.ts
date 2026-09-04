@@ -1,7 +1,21 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
-import { createNotetakerBot } from "@/lib/recall";
+import { createNotetakerBot, getBotStatus } from "@/lib/recall";
+
+/** GET ?id=: live bot status for the test-join tracker. */
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user?.email) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const botId = new URL(req.url).searchParams.get("id");
+  if (!botId) return NextResponse.json({ error: "id required" }, { status: 400 });
+  try {
+    const status = await getBotStatus(botId);
+    return NextResponse.json({ status });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Status check failed" }, { status: 500 });
+  }
+}
 
 /**
  * POST { meetingUrl, eventId? }: fire a test bot at any Meet URL right now.

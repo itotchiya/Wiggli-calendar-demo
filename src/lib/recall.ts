@@ -180,6 +180,14 @@ export async function getRecordingTranscriptSource(recordingId: string): Promise
   };
 }
 
+/** Live bot status for the test-join tracker (joining → waiting room → recording → done/fatal). */
+export async function getBotStatus(botId: string): Promise<{ code: string; sub_code: string | null; updated_at?: string }> {
+  const response = await recallFetch(`/api/v1/bot/${botId}/`);
+  if (!response.ok) throw new Error(`Recall get bot failed (${response.status}).`);
+  const data = (await response.json()) as { status?: { code?: string; sub_code?: string | null; updated_at?: string } };
+  return { code: String(data.status?.code ?? "unknown"), sub_code: data.status?.sub_code ?? null, updated_at: data.status?.updated_at };
+}
+
 export function readableToText(lines: ReadableLine[]): string {
   return lines.map((l) => `[${l.time}] ${l.speaker}: ${l.text}`).join("\n");
 }

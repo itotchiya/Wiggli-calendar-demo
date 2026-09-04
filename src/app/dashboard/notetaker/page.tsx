@@ -55,6 +55,8 @@ export default function NotetakerPage() {
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testNoteId, setTestNoteId] = useState<string | null>(null);
+  const [testBotId, setTestBotId] = useState<string | null>(null);
+  const [testPhase, setTestPhase] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,44 @@ export default function NotetakerPage() {
     void loadEvents();
   }, []);
 
+  // Live tracker for the test bot: joining → lobby → recording → done/fatal.
+  useEffect(() => {
+    if (!testBotId) return;
+    let polls = 0;
+    let timer: number | undefined;
+    const tick = async () => {
+      polls += 1;
+      try {
+        const res = await fetch(`/api/notetaker/test-join?id=${encodeURIComponent(testBotId)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        const code = String(data.status?.code ?? "unknown");
+        const sub = data.status?.sub_code ? ` (${data.status.sub_code})` : "";
+        const label: Record<string, string> = {
+          joining_call: "Joining the call…",
+          in_waiting_room: "In the Meet lobby — admit “Wiggli Notetaker” now!",
+          in_call_not_recording: "Admitted — starting to record…",
+          in_call_recording: "Recording — talk, then leave the Meet to finish.",
+          done: "Left the call — recording is processing.",
+          fatal: `Failed${sub} — check the Meet URL and try again.`,
+        };
+        setTestPhase(label[code] ?? `${code}${sub}`);
+        if (code === "done" || code === "fatal") {
+          if (timer) window.clearInterval(timer);
+          void load();
+        }
+      } catch (err) {
+        if (polls > 2) setTestPhase(err instanceof Error ? err.message : "Status check failed");
+      }
+      if (polls >= 60 && timer) window.clearInterval(timer);
+    };
+    timer = window.setInterval(() => void tick(), 5000);
+    void tick();
+    return () => {
+      if (timer) window.clearInterval(timer);
+    };
+  }, [testBotId]);
+
   const createNote = async (eventId: string, withBot: boolean) => {
     try {
       const res = await fetch("/api/notetaker/notes", {
@@ -125,6 +165,8 @@ export default function NotetakerPage() {
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
       const botId = String(data.bot?.id ?? "unknown");
+      setTestBotId(botId);
+      setTestPhase("Bot created — joining…");
       if (data.noteId) setTestNoteId(String(data.noteId));
       setTestResult(
         `Bot sent — id ${botId}. Open the Meet now and admit “Wiggli Notetaker” from the lobby. When everyone leaves, it stops recording and the summary lands on the note.`
@@ -184,7 +226,7 @@ export default function NotetakerPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setTestOpen(true); setTestResult(null); }}
+                    onClick={() => { setTestOpen(true); setTestResult(null); setTestNoteId(null); setTestBotId(null); setTestPhase(null); }}
                     className={`inline-flex h-10 items-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 text-[13.5px] font-semibold text-white transition hover:bg-white/15 ${styles.btnWhite}`}
                   >
                     <Bot size={16} /> Test join
@@ -337,6 +379,11 @@ export default function NotetakerPage() {
                 {testResult && (
                   <div className="mt-3 rounded-xl bg-slate-100 p-3 text-[12.5px] leading-relaxed text-slate-700">
                     {testResult}
+                    {testPhase && (
+                      <p className="mt-1.5 flex items-center gap-1.5 font-bold text-teal-700">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-600" />{testPhase}
+                      </p>
+                    )}
                     {testNoteId && (
                       <Link href={`/dashboard/notetaker/${testNoteId}`} className="mt-1 block font-bold text-teal-700 underline">
                         Open the note →
