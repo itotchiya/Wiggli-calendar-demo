@@ -1,13 +1,15 @@
 "use client";
 
-import { createPortal } from "react-dom";
-import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight, Mail, Plus, GripVertical, EyeOff, Search, ChevronDown, Send, MessageSquare, Trash2, ClipboardList, FileText, Coins } from "lucide-react";
+import { AlertTriangle, CalendarPlus, Mail, Plus, GripVertical, EyeOff, Search, ChevronDown, Send, MessageSquare, Trash2, ClipboardList, Coins } from "lucide-react";
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/chrome";
 import { MeetingsTable } from "@/components/meetings-table";
 import { EventDrawer, type LinkedContext } from "@/components/event-drawer";
 import { VacancyProgressDrawer } from "@/components/vacancy-progress-drawer";
+import { usePortalMenu, PortalMenuList } from "@/components/ui/portal-menu";
+import { DetailTabs } from "@/components/ui/detail-tabs";
+import { DetailTopbar } from "@/components/ui/detail-topbar";
 import { getNextQuarterSlot } from "@/lib/datetime-proto";
 import { showToast } from "@/components/toaster";
 import type { EventDto } from "@/types/event";
@@ -47,10 +49,7 @@ export default function SingleCandidatePage() {
     const qs = next.toString();
     router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
   }, [activeTab, pathname, router, searchParams]);
-  const [addVacancyOpen, setAddVacancyOpen] = useState(false);
-  const addVacancyRef = useRef<HTMLButtonElement>(null);
-  const addVacancyMenuRef = useRef<HTMLDivElement>(null);
-  const [addVacancyPos, setAddVacancyPos] = useState<{ top: number; left: number } | null>(null);
+  const menu = usePortalMenu();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleFromProcess, setScheduleFromProcess] = useState(false);
   const [scheduleSlot, setScheduleSlot] = useState(getNextQuarterSlot());
@@ -98,31 +97,7 @@ export default function SingleCandidatePage() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    if (!addVacancyOpen) return;
-    const update = () => {
-      if (!addVacancyRef.current) return;
-      const r = addVacancyRef.current.getBoundingClientRect();
-      setAddVacancyPos({ top: r.bottom + 6, left: r.right - 224 });
-    };
-    update();
-    const close = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (addVacancyMenuRef.current?.contains(t) || addVacancyRef.current?.contains(t)) return;
-      setAddVacancyOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [addVacancyOpen]);
-
   const handleSchedule = () => {
-    setAddVacancyOpen(false);
     setScheduleFromProcess(false);
     setScheduleSlot(getNextQuarterSlot());
     setScheduleOpen(true);
@@ -165,19 +140,7 @@ export default function SingleCandidatePage() {
     <>
       <Header kicker={<><span className="kicker-muted">Permanent / </span>{name}</>} />
       <main className="contact-detail-page" style={{ background: "#f8fafc" }}>
-        <div className="contact-detail-topbar">
-          <button className="contact-back-button" onClick={() => router.back()} type="button">
-            <ChevronLeft size={16} /> Back
-          </button>
-          <div className="contact-detail-nav">
-            <button className="contact-nav-arrow" disabled type="button">
-              <ChevronLeft size={16} />
-            </button>
-            <button className="contact-nav-arrow" type="button">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
+        <DetailTopbar onBack={() => router.back()} nextDisabled={false} />
 
         <div className="contact-detail-main-card">
           <div className="contact-detail-header">
@@ -209,45 +172,37 @@ export default function SingleCandidatePage() {
               </div>
             </div>
             <div className="contact-detail-actions">
-              <button ref={addVacancyRef} className="contact-detail-more" aria-expanded={addVacancyOpen} onClick={() => setAddVacancyOpen((v) => !v)} type="button">
-                More <ChevronDown size={14} style={{ transform: addVacancyOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+              <button ref={menu.triggerRef} className="contact-detail-more" aria-expanded={menu.open} onClick={() => { menu.alignMenu(224, "right"); menu.setOpen((v) => !v); }} type="button">
+                More <ChevronDown size={14} style={{ transform: menu.open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
               </button>
-              {addVacancyOpen && addVacancyPos && typeof document !== "undefined" && createPortal(
-                <div ref={addVacancyMenuRef} className="contact-more-menu" role="menu" style={{ top: addVacancyPos.top, left: addVacancyPos.left }}>
-                  <button role="menuitem" onClick={handleSchedule}><CalendarPlus size={16} /> Schedule a meeting</button>
-                  <button role="menuitem" onClick={() => setAddVacancyOpen(false)}><Send size={16} /> Send vacancy</button>
-                  <button role="menuitem" onClick={() => setAddVacancyOpen(false)}><Mail size={16} /> Send email</button>
-                  <button role="menuitem" onClick={() => setAddVacancyOpen(false)}><ClipboardList size={16} /> Add task</button>
-                  <button role="menuitem" onClick={() => setAddVacancyOpen(false)}><MessageSquare size={16} /> Add note</button>
-                  <button role="menuitem" onClick={() => setAddVacancyOpen(false)}><Send size={16} /> Submit candidate</button>
-                  <button role="menuitem" onClick={() => setAddVacancyOpen(false)}><EyeOff size={16} /> Hide permanently</button>
-                  <button role="menuitem" className="danger" onClick={() => setAddVacancyOpen(false)}><Trash2 size={16} /> Delete</button>
-                </div>, document.body
-              )}
+              <PortalMenuList
+                open={menu.open}
+                pos={menu.pos}
+                menuRef={menu.menuRef}
+                onClose={() => menu.setOpen(false)}
+                items={[
+                  { label: "Schedule a meeting", icon: CalendarPlus, action: handleSchedule },
+                  { label: "Send vacancy", icon: Send },
+                  { label: "Send email", icon: Mail },
+                  { label: "Add task", icon: ClipboardList },
+                  { label: "Add note", icon: MessageSquare },
+                  { label: "Submit candidate", icon: Send },
+                  { label: "Hide permanently", icon: EyeOff },
+                  { label: "Delete", icon: Trash2, danger: true },
+                ]}
+              />
               <button className="contact-detail-add" type="button"><Plus size={14} /> Add to a job</button>
             </div>
           </div>
 
-          <div className="contact-detail-tabs" role="tablist">
-            {tabs.map((t) => {
-              const clickable = t === "Overview" || t === "Processes" || t === "Meetings";
-              return (
-                <button
-                  key={t}
-                  role="tab"
-                  aria-selected={t === activeTab}
-                  className={t === activeTab ? "active" : ""}
-                  onClick={() => { if (clickable) setActiveTab(t); }}
-                  style={{ cursor: clickable ? "pointer" : "default" }}
-                  aria-disabled={!clickable}
-                  type="button"
-                >
-                  {t}{t === "Meetings" && <span className="detail-tab-new-badge">NEW</span>}
-                </button>
-              );
-            })}
-            <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, color: "#64748b", fontSize: 13 }}><span style={{ display: "grid", placeItems: "center", width: 16, height: 16, border: "1px solid #e2e8f0", borderRadius: 4 }}>⊞</span> Layout</span>
-          </div>
+          <DetailTabs
+            tabs={tabs.map((t) => ({ label: t, isNew: t === "Meetings" }))}
+            active={activeTab}
+            onChange={setActiveTab}
+            variant="contact"
+            clickable={(t) => t === "Overview" || t === "Processes" || t === "Meetings"}
+            trailing={<span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, color: "#64748b", fontSize: 13 }}><span style={{ display: "grid", placeItems: "center", width: 16, height: 16, border: "1px solid #e2e8f0", borderRadius: 4 }}>⊞</span> Layout</span>}
+          />
         </div>
 
         {activeTab === "Meetings" ? (

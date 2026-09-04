@@ -47,11 +47,12 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/chrome";
 import { EventDrawer, type DrawerCandidate, type LinkedContext } from "@/components/event-drawer";
 import { MeetingsTable } from "@/components/meetings-table";
+import { usePortalMenu, PortalMenuList, type PortalMenuItem } from "@/components/ui/portal-menu";
+import { DetailTabs } from "@/components/ui/detail-tabs";
 import { getNextQuarterSlot } from "@/lib/datetime-proto";
 import { useHighlight } from "@/lib/highlight";
 import { showToast } from "@/components/toaster";
@@ -263,10 +264,7 @@ export default function JobDetailPage() {
   const [slot, setSlot] = useState(getNextQuarterSlot());
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [meetingSlot, setMeetingSlot] = useState(getNextQuarterSlot());
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreBtnRef = useRef<HTMLButtonElement>(null);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
-  const [morePos, setMorePos] = useState<{ top: number; left: number } | null>(null);
+  const menu = usePortalMenu();
   const [dbMeetings, setDbMeetings] = useState<ReturnType<typeof eventToMeetingRow>[]>([]);
 
   const loadMeetings = useCallback(async () => {
@@ -287,29 +285,6 @@ export default function JobDetailPage() {
   useEffect(() => {
     void loadMeetings();
   }, [loadMeetings]);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    const updatePos = () => {
-      if (!moreBtnRef.current) return;
-      const rect = moreBtnRef.current.getBoundingClientRect();
-      setMorePos({ top: rect.bottom + 6, left: rect.right - 224 });
-    };
-    updatePos();
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (moreMenuRef.current?.contains(t) || moreBtnRef.current?.contains(t)) return;
-      setMoreOpen(false);
-    };
-    document.addEventListener("pointerdown", onDown);
-    window.addEventListener("scroll", updatePos, true);
-    window.addEventListener("resize", updatePos);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("scroll", updatePos, true);
-      window.removeEventListener("resize", updatePos);
-    };
-  }, [moreOpen]);
 
   const [stages, setStages] = useState<PipelineStage[]>(() => pipelineStages.map((stage) => ({ ...stage, candidates: [...stage.candidates] })));
   const [activeCandidate, setActiveCandidate] = useState<PipelineCandidate | null>(null);
@@ -422,35 +397,33 @@ export default function JobDetailPage() {
             <span className="job-pill-on">On <b>+2</b></span>
             <Volume2 size={18} />
           </div>
-          <button ref={moreBtnRef} className="job-detail-more" aria-label="More actions" aria-expanded={moreOpen} onClick={() => setMoreOpen((v) => !v)} type="button"><MoreHorizontal size={18} /></button>
-          {moreOpen && morePos && typeof document !== "undefined" && createPortal(
-            <div ref={moreMenuRef} className="contact-more-menu" role="menu" style={{ top: morePos.top, left: morePos.left }}>
-              <button role="menuitem" onClick={() => { setMoreOpen(false); handleMeetingSchedule(); }}><CalendarPlus size={18} /> Schedule a meeting</button>
-              <span className="contact-more-menu-group">Job options</span>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Ban size={18} /> Close to applications</button>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Pencil size={18} /> Edit</button>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Copy size={18} /> Duplicate</button>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Check size={18} /> Mark as filled</button>
-              <span className="contact-more-menu-group">Pipeline options</span>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Plus size={18} /> Add candidate</button>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Plus size={18} /> Add new step</button>
-              <button role="menuitem" onClick={() => setMoreOpen(false)}><Plus size={18} /> Add task</button>
-            </div>, document.body
-          )}
+          <button ref={menu.triggerRef} className="job-detail-more" aria-label="More actions" aria-expanded={menu.open} onClick={() => { menu.alignMenu(224, "right"); menu.setOpen((v) => !v); }} type="button"><MoreHorizontal size={18} /></button>
+          <PortalMenuList
+            open={menu.open}
+            pos={menu.pos}
+            menuRef={menu.menuRef}
+            onClose={() => menu.setOpen(false)}
+            items={[
+              { label: "Schedule a meeting", icon: CalendarPlus, action: handleMeetingSchedule },
+              { label: "Close to applications", icon: Ban, group: "Job options" },
+              { label: "Edit", icon: Pencil },
+              { label: "Duplicate", icon: Copy },
+              { label: "Mark as filled", icon: Check },
+              { label: "Add candidate", icon: Plus, group: "Pipeline options" },
+              { label: "Add new step", icon: Plus },
+              { label: "Add task", icon: Plus },
+            ] as PortalMenuItem[]}
+          />
         </div>
         <p className="job-detail-meta">#{job.reference} • Created and Posted 15/06/2026 by Axelle Bastin</p>
 
-        <div className="job-tabs" role="tablist" style={{ flexShrink: 0, width: "100%", minWidth: 0 }}>
-          {jobTabs.map((tab) => {
-            const Icon = tab.icon;
-            const clickable = tab.label === "Pipeline" || tab.label === "Meetings";
-            return (
-              <button key={tab.label} role="tab" aria-selected={tab.label === activeTab} className={tab.label === activeTab ? "active" : ""} onClick={() => { if (clickable) setActiveTab(tab.label); }} aria-disabled={!clickable} type="button">
-                <Icon size={15} /> {tab.label}{tab.isNew && <span className="detail-tab-new-badge">NEW</span>}
-              </button>
-            );
-          })}
-        </div>
+        <DetailTabs
+          tabs={jobTabs}
+          active={activeTab}
+          onChange={setActiveTab}
+          variant="job"
+          clickable={(label) => label === "Pipeline" || label === "Meetings"}
+        />
 
         {activeTab === "Meetings" ? (
           <MeetingsTable

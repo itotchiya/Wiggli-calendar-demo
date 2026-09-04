@@ -1,12 +1,10 @@
 "use client";
 
-import { createPortal } from "react-dom";
 import {
   Bookmark,
   CalendarPlus,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   Columns3,
   Expand,
   Eye,
@@ -21,10 +19,12 @@ import {
   Table2,
   Trash2,
 } from "lucide-react";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/chrome";
 import { EventDrawer } from "@/components/event-drawer";
+import { usePortalMenu, PortalMenuList } from "@/components/ui/portal-menu";
+import { Pagination } from "@/components/ui/pagination";
 import { getNextQuarterSlot } from "@/lib/datetime-proto";
 import { showToast } from "@/components/toaster";
 import { candidateRows, type CandidateListRow } from "../jobs/data";
@@ -36,65 +36,29 @@ const candidateCell = (value: string, key: string) => (
 );
 
 function CandidateActionsMenu({ candidate, onPropose, onView }: { candidate: CandidateListRow; onPropose: () => void; onView: () => void }) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const update = () => {
-      if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 6, left: r.left });
-    };
-    update();
-    const close = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [open]);
-
-  const items = [
-    { label: "View full profile", icon: Eye, action: onView },
-    { label: "Schedule a meeting", icon: CalendarPlus, action: onPropose },
-    { label: "Hide permanently", icon: EyeOff },
-    { label: "Delete", icon: Trash2 },
-    { label: "Send email", icon: Mail },
-    { label: "Submit candidate", icon: Send },
-    { label: "Resend Activation code", icon: RotateCcw },
-  ];
+  const menu = usePortalMenu();
 
   return (
     <div className="candidate-actions">
-      <button ref={btnRef} className="candidate-menu" aria-label="Candidate actions" aria-expanded={open} onClick={() => setOpen((v) => !v)} type="button">
+      <button ref={menu.triggerRef} className="candidate-menu" aria-label="Candidate actions" aria-expanded={menu.open} onClick={() => { menu.alignMenu(212, "left"); menu.setOpen((v) => !v); }} type="button">
         <MoreHorizontal size={15} />
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div ref={menuRef} className="candidate-actions-menu candidate-actions-menu--fixed" role="menu" style={{ top: pos.top, left: pos.left }}>
-            {items.map((it) => {
-              const Icon = it.icon;
-              return (
-                <button key={it.label} role="menuitem" type="button" onClick={() => { setOpen(false); it.action?.(); }}>
-                  <Icon size={15} /> {it.label}
-                </button>
-              );
-            })}
-          </div>,
-          document.body
-        )}
+      <PortalMenuList
+        open={menu.open}
+        pos={menu.pos}
+        menuRef={menu.menuRef}
+        onClose={() => menu.setOpen(false)}
+        className="candidate-actions-menu candidate-actions-menu--fixed"
+        items={[
+          { label: "View full profile", icon: Eye, action: onView },
+          { label: "Schedule a meeting", icon: CalendarPlus, action: onPropose },
+          { label: "Hide permanently", icon: EyeOff },
+          { label: "Delete", icon: Trash2 },
+          { label: "Send email", icon: Mail },
+          { label: "Submit candidate", icon: Send },
+          { label: "Resend Activation code", icon: RotateCcw },
+        ]}
+      />
     </div>
   );
 }
@@ -233,27 +197,7 @@ export default function PermanentCandidatesPage() {
           </table>
         </div>
 
-        <div className="jobs-pagination">
-          <span className="rows-per-page">
-            Rows per page <b>12 <ChevronDown size={13} /></b>
-          </span>
-          <div className="pagination-pages">
-            <button aria-label="Previous page" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} type="button">
-              <ChevronLeft size={15} />
-            </button>
-            {[1, 2, 3, 4].map((n) => (
-              <button key={n} className={page === n ? "active" : ""} onClick={() => setPage(n)} type="button">
-                {n}
-              </button>
-            ))}
-            <span>…</span>
-            <button onClick={() => setPage(68)} type="button">68</button>
-            <button onClick={() => setPage(69)} type="button">69</button>
-            <button aria-label="Next page" disabled={page === 69} onClick={() => setPage((p) => Math.min(69, p + 1))} type="button">
-              <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
+        <Pagination page={page} pages={[1, 2, 3, 4, "…", 68, 69]} onPage={setPage} rowsPerPage={12} />
       </main>
       <EventDrawer
         open={!!drawerCandidate}

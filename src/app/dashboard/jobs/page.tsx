@@ -2,19 +2,17 @@
 
 import {
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Columns3,
   Download,
   Info,
-  ListFilter,
   MoreHorizontal,
   Plus,
-  Search,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Header } from "@/components/chrome";
+import { SearchToolbar } from "@/components/ui/toolbar";
+import { Pagination } from "@/components/ui/pagination";
 import { jobs } from "./data";
 import { JobsPageHeader } from "./ui";
 
@@ -119,19 +117,10 @@ export default function JobsPage() {
           </div>
         </div>
 
-        <div className="jobs-toolbar">
-          <label className="jobs-search">
-            <input type="text" placeholder="Search in (Ref, job title, description)" />
-            <Search size={16} />
-          </label>
-          <button className="jobs-filters-button" type="button">
-            <ListFilter size={16} /> Filters
-          </button>
-          <div className="jobs-toolbar-right">
-            <button className="icon-button" aria-label="Download" type="button"><Download size={16} /></button>
-            <button className="jobs-columns-button" type="button"><Columns3 size={16} /> Columns <ChevronDown size={14} /></button>
-          </div>
-        </div>
+        <SearchToolbar placeholder="Search in (Ref, job title, description)" filterLabel="Filters">
+          <button className="icon-button" aria-label="Download" type="button"><Download size={16} /></button>
+          <button className="jobs-columns-button" type="button"><Columns3 size={16} /> Columns <ChevronDown size={14} /></button>
+        </SearchToolbar>
 
         <p className="jobs-results-count"><b>60</b> results in total</p>
 
@@ -188,25 +177,7 @@ export default function JobsPage() {
           </table>
         </div>
 
-        <div className="jobs-pagination">
-          <span className="rows-per-page">
-            Rows per page <button className="rows-per-page-button" type="button">24 <ChevronDown size={12} /></button>
-          </span>
-          <div className="pagination-pages">
-            <button aria-label="Previous page" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
-              <ChevronLeft size={16} />
-            </button>
-            {[1, 2, 3].map((number) => (
-              <button key={number} className={page === number ? "active" : ""} onClick={() => setPage(number)} type="button">
-                {number}
-              </button>
-            ))}
-            <button aria-label="Next page" disabled={page === 3} onClick={() => setPage((current) => Math.min(3, current + 1))} type="button">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <span style={{ width: 110 }} aria-hidden="true" />
-        </div>
+        <Pagination page={page} pages={[1, 2, 3]} onPage={setPage} rowsPerPage={24} />
       </main>
     </>
   );

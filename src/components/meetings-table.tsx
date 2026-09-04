@@ -1,11 +1,16 @@
 "use client";
 import { useState, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ChevronDown, MoreHorizontal, Video, MapPin, Building2, Link2, ExternalLink, Copy, Check, Target, BriefcaseBusiness, Search, ListFilter, Columns3, Download, CalendarPlus } from "lucide-react";
+import { ChevronDown, MoreHorizontal, ExternalLink, Copy, Check, Target, BriefcaseBusiness, Columns3, Download, CalendarPlus } from "lucide-react";
 import { EventPreviewDialog } from "./event-preview";
 import type { CalendarEventItem } from "@/lib/calendar-types";
 import { normalizeEventType } from "@/lib/event-types";
+import { Avatar, AvatarStack } from "./ui/avatar";
+import { StatusPill } from "./ui/status-pill";
+import { LocationTypeCell, MeetingPlaceIcon } from "./ui/location-cells";
+import { SearchToolbar } from "./ui/toolbar";
+
+export { StatusPill, LocationTypeCell, MeetingPlaceIcon };
 
 type LinkedOrg = { id: string; name: string; initials: string; color: string; parent?: { name: string; initials: string; color: string } };
 export type MeetingRow = {
@@ -102,41 +107,6 @@ const mockMeetings: MeetingRow[] = [
   },
 ];
 
-export function StatusPill({ status }: { status: MeetingRow["status"] | string }) {
-  const styles: Record<string, React.CSSProperties> = {
-    Draft: { border: "1px solid #94a3b8", color: "#475569", background: "#fff" },
-    Scheduled: { border: "1px solid #2563eb", color: "#2563eb", background: "#fff" },
-    Overdue: { border: "1px solid #dc2626", color: "#dc2626", background: "#fff" },
-    Completed: { border: "1px solid #15803d", color: "#15803d", background: "#fff" },
-    Canceled: { border: "1px solid #dc2626", color: "#dc2626", background: "#fff" },
-  };
-  return <span style={{ ...styles[status], padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", display: "inline-flex" }}>{status}</span>;
-}
-
-function Avatar({ name, avatar, size = 32 }: { name: string; avatar?: string; size?: number }) {
-  const initials = name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-  const color = ["#667eea", "#0f766e", "#c06c84", "#4f7c8d", "#8b6fc0", "#d97757"][name.charCodeAt(0) % 6];
-  return (
-    <span style={{ width: size, height: size, borderRadius: "50%", background: color, color: "#fff", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 400, flex: "none", overflow: "hidden", border: "1px solid #e2e8f0" }}>
-      {avatar ? <img src={avatar} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
-    </span>
-  );
-}
-
-export function MeetingPlaceIcon({ provider }: { provider?: string }) {
-  const logos: Record<string, string> = {
-    wiggli: "/wiggli-meet.png",
-    google: "/google-meet.png",
-    teams: "/microsoft-teams.png",
-    zoom: "/Zoom-logo.png",
-  };
-  if (provider && logos[provider]) {
-    return <span style={{ width: 32, height: 32, borderRadius: 6, background: "#fff", display: "grid", placeItems: "center", flex: "none", overflow: "hidden" }}><img src={logos[provider]} alt={provider} style={{ width: 22, height: 22, objectFit: "contain" }} /></span>;
-  }
-  if (provider === "custom" || provider === "manual") return <span style={{ width: 32, height: 32, borderRadius: 6, background: "#f1f5f9", display: "grid", placeItems: "center", color: "#64748b", flex: "none" }}><Link2 size={14} /></span>;
-  return null;
-}
-
 function buildMeetingPreview(row: MeetingRow): CalendarEventItem {
   // parse "14 Apr 2026, 09:15 - 09:45"
   let year = "2026", month = "04", day = "14", hour = 9, minute = 15, endHour = 9, endMinute = 45;
@@ -218,17 +188,9 @@ function buildMeetingPreview(row: MeetingRow): CalendarEventItem {
   };
 }
 
-export function LocationTypeCell({ type }: { type: string }) {
-  if (!type || type === "—") return <span style={{ color: "#cbd5e1" }}>—</span>;
-  const icon = type === "Online" ? <Video size={14} style={{ color: "#475569" }} /> : type === "Another location" ? <MapPin size={14} style={{ color: "#475569" }} /> : <Building2 size={14} style={{ color: "#475569" }} />;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>{icon} {type}</span>;
-}
-
 export function MeetingsTable({ filterEntity, filterId, filterName, extraMeetings = [], onScheduleMeeting, rows: providedRows }: { filterEntity?: "candidate" | "contact" | "job" | "organization" | "opportunity"; filterId?: string; filterName?: string; extraMeetings?: any[]; onScheduleMeeting?: () => void; rows?: MeetingRow[] }) {
   const router = useRouter();
   const [copied, setCopied] = useState<string | null>(null);
-  const [hoverAttendee, setHoverAttendee] = useState<string | null>(null);
-  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
   const [query, setQuery] = useState("");
   const [previewEvent, setPreviewEvent] = useState<CalendarEventItem | null>(null);
   const openPreview = (row: MeetingRow) => setPreviewEvent(buildMeetingPreview(row));
@@ -293,18 +255,11 @@ export function MeetingsTable({ filterEntity, filterId, filterName, extraMeeting
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16, width: "100%", minWidth: 0, overflow: "hidden" }}>
-      <div className="jobs-toolbar" style={{ marginTop: 0, padding: "0 2px", width: "100%", minWidth: 0, flexShrink: 0 }}>
-        <label className="jobs-search">
-          <input type="text" placeholder="Search in (Ref, Title, Meeting type, Organizer...)" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <Search size={16} />
-        </label>
-        <button className="jobs-filters-button" type="button"><ListFilter size={16} /> Filter</button>
-        <div className="jobs-toolbar-right">
-          <button className="icon-button" aria-label="Download" type="button"><Download size={16} /></button>
-          <button className="jobs-columns-button" type="button"><Columns3 size={16} /> Columns <ChevronDown size={14} /></button>
-          {onScheduleMeeting && <button type="button" onClick={() => onScheduleMeeting?.()} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", background: "#fff", color: "#0f766e", border: "1px solid #0f766e", borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}><CalendarPlus size={16} style={{ color: "#0f766e" }} /> Schedule meeting</button>}
-        </div>
-      </div>
+      <SearchToolbar placeholder="Search in (Ref, Title, Meeting type, Organizer...)" value={query} onChange={setQuery} filterLabel="Filter">
+        <button className="icon-button" aria-label="Download" type="button"><Download size={16} /></button>
+        <button className="jobs-columns-button" type="button"><Columns3 size={16} /> Columns <ChevronDown size={14} /></button>
+        {onScheduleMeeting && <button type="button" onClick={() => onScheduleMeeting?.()} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", background: "#fff", color: "#0f766e", border: "1px solid #0f766e", borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}><CalendarPlus size={16} style={{ color: "#0f766e" }} /> Schedule meeting</button>}
+      </SearchToolbar>
       <div className="jobs-table-wrap" style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "auto", width: "100%", minWidth: 0, maxWidth: "100%" }}>
         <style>{`.jobs-table.meetings-table td { max-width: none !important; white-space: nowrap; } .jobs-table.meetings-table th { white-space: nowrap; }`}</style>
         <table className="jobs-table meetings-table" style={{ minWidth: "max-content" }}>
@@ -396,24 +351,7 @@ export function MeetingsTable({ filterEntity, filterId, filterName, extraMeeting
                   ) : <span style={{ color: "#cbd5e1" }}>—</span>}
                 </td>
                 <td>
-                  <span style={{ display: "inline-flex", alignItems: "center" }}>
-                    {row.attendees.slice(0, 5).map((a: any, idx: number) => (
-                      <span
-                        key={a.name + idx}
-                        onMouseEnter={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setHoverRect(r); setHoverAttendee(row.ref + a.name); }}
-                        onMouseLeave={() => { setHoverRect(null); setHoverAttendee(null); }}
-                        style={{ marginLeft: idx === 0 ? 0 : -8, position: "relative", cursor: "pointer" }}
-                        data-attendee={a.name}
-                      >
-                        <Avatar name={a.name} avatar={(a as any).avatar} size={32} />
-                        {hoverAttendee === row.ref + a.name && hoverRect && typeof document !== "undefined" && createPortal(
-                          <span style={{ position: "fixed", left: hoverRect.left + hoverRect.width / 2, top: hoverRect.top - 36, transform: "translateX(-50%)", background: "#0f172a", color: "#fff", padding: "6px 10px", borderRadius: 8, fontSize: 12, whiteSpace: "nowrap", zIndex: 50, boxShadow: "0 4px 12px rgba(0,0,0,.2)", pointerEvents: "none" }}>
-                            {a.name}
-                          </span>, document.body)}
-                      </span>
-                    ))}
-                    {row.attendees.length > 5 && <span style={{ marginLeft: 4, fontSize: 12, color: "#64748b" }}>+{row.attendees.length - 5}</span>}
-                  </span>
+                  <AvatarStack names={row.attendees} rowKey={row.ref} />
                 </td>
                 <td><LocationTypeCell type={row.locationType} /></td>
                 <td>
