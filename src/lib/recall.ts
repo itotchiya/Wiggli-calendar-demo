@@ -49,6 +49,9 @@ export async function createNotetakerBot(input: CreateBotInput): Promise<RecallB
       meeting_url: input.meetingUrl,
       join_at: input.joinAt,
       bot_name: "Wiggli Notetaker",
+      // Grid view: all cameras at once (default speaker_view shows only the
+      // active speaker fullscreen). gallery_view_v2 = newest grid layout.
+      recording_config: { video_mixed_layout: "gallery_view_v2" },
       // Leave behavior: stop recording + leave 60s after everyone is gone
       // (60s grace so brief drops don't kill the bot; ignored in the first
       // minute while people are still joining). Cap idle burns: nobody joins
