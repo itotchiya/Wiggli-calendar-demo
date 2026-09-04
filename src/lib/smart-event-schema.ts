@@ -34,6 +34,8 @@ export type SmartEventDocument = {
       value?: string | null;
       generatedOnCreate?: boolean;
     };
+    /** AI Notetaker: the Wiggli bot joins this meeting to record and take notes. */
+    aiNotetaker?: boolean;
     reminderMinutes?: number | null;
   };
   organizer: {
@@ -226,6 +228,7 @@ export function parseSmartEventDocument(value: unknown): SmartEventDocument {
         value: optionalString(locationRaw.value) ?? null,
         generatedOnCreate: Boolean(locationRaw.generatedOnCreate),
       },
+      aiNotetaker: eventRaw.aiNotetaker === true ? true : undefined,
       reminderMinutes:
         eventRaw.reminderMinutes == null
           ? null

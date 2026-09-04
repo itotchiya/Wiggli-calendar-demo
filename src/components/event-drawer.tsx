@@ -1676,6 +1676,7 @@ export function EventDrawer({
          slots: smartSlots,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris",
         location,
+        ...(locationSnapshot?.aiNotetaker === true ? { aiNotetaker: true } : {}),
         reminderMinutes,
       },
       organizer: {

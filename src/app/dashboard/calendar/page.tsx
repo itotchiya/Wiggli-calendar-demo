@@ -117,6 +117,7 @@ function mapEvent(event: EventDto, completedIds?: Set<string>, currentOrganizer?
     meetingLinks: event.previewData?.meetingLinks?.length ? event.previewData.meetingLinks : event.hangoutLink ? [{ provider: "Google Meet", url: event.hangoutLink }] : event.location?.startsWith("http") ? [{ provider: "Meeting", url: event.location }] : [],
     locations: event.previewData?.locations?.length ? event.previewData.locations : event.location && !event.location.startsWith("http") ? [{ label: event.location }] : [],
     linkedTo: event.previewData?.linkedTo ?? [],
+    aiNotetaker: event.previewData?.aiNotetaker === true,
     previewAttendees: event.attendees.map((attendee, index) => ({
       id: attendee.id,
       name: attendee.name ?? attendee.email,

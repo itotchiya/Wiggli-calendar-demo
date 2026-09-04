@@ -37,6 +37,8 @@ export type CalendarEventItem = {
   meetingLinks?: { provider: string; url: string }[];
   locations?: { label: string; type?: string }[];
   linkedTo?: { type: string; label: string; avatar?: string }[];
+  /** AI Notetaker enabled — the Wiggli bot joins to record this meeting. */
+  aiNotetaker?: boolean;
   previewAttendees: CalendarAttendee[];
   /** Pending "Propose a new time" counter-proposals (from Gmail notifications). */
   proposals?: { id: string; attendeeEmail: string; slotLabel: string; note: string | null; createdAt: string }[];

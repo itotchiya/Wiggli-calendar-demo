@@ -262,6 +262,7 @@ export async function createEventAndInvite(opts: {
       (opts.smartDocument?.attendees ?? []).filter((attendee) => attendee.avatar).map((attendee) => [attendee.email.toLowerCase(), attendee.avatar!])
     ),
     linkedTo: (opts.smartDocument?.linkedTo ?? []).map((record) => ({ type: record.type, label: record.label, ...(record.avatar ? { avatar: record.avatar } : {}) })),
+    ...(opts.smartDocument?.event.aiNotetaker === true ? { aiNotetaker: true } : {}),
     locations: smartLocation && smartLocation.type !== "none" && smartLocation.type !== "online" && smartLocation.value
       ? [{ label: smartLocation.value, type: smartLocation.type === "company" ? "Company office" : "Another location" }]
       : [],

@@ -14,6 +14,7 @@ import {
   MapPin,
   MessageCircleMore,
   MessageSquareText,
+  Mic,
   PenLine,
   RefreshCw,
   Tag,
@@ -33,6 +34,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import type { CalendarAttendee, CalendarEventItem } from "@/lib/calendar-types";
 import { getCalendarTime } from "@/lib/datetime-proto";
+import { NotetakerBadge } from "./ui/notetaker-badge";
 
 function PreviewAttendeeAvatar({ attendee, defaultAvatar = false }: { attendee: CalendarAttendee; defaultAvatar?: boolean }) {
   const [failed, setFailed] = useState(false);
@@ -378,6 +380,16 @@ export function EventPreviewDialog({
         {locations.length > 0 && <PreviewSection icon={<MapPin size={16} />} title="Location"><div className="preview-locations">{locations.map((location) => <LocationRow key={`${location.type ?? "location"}-${location.label}`} location={location} />)}</div></PreviewSection>}
 
         {meetingLinks.length > 0 && <PreviewSection icon={<Link2 size={16} />} title="Meeting link"><div className="preview-meeting-links">{meetingLinks.map((link) => <MeetingLinkRow key={`${link.provider}-${link.url}`} link={link} />)}</div></PreviewSection>}
+
+        {event.aiNotetaker === true && (
+          <div className="preview-section">
+            <span className="preview-meta-label"><Mic size={16} /> AI Notetaker</span>
+            <div className="preview-notetaker-card">
+              <NotetakerBadge label="Wiggli Notetaker" />
+              <p className="preview-notetaker-note">The bot joins this meeting to record, transcribe and draft AI notes. Admit "Wiggli Notetaker" from the lobby when it joins.</p>
+            </div>
+          </div>
+        )}
 
         <div className="preview-section">
           <span className="preview-meta-label"><MessageSquareText size={16} /> Description</span>

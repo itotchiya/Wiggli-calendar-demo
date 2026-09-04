@@ -18,6 +18,7 @@ existing `globals.css` classes — these are behavior/logic extractions only.
 | `DetailTopbar` | `detail-topbar.tsx` | Back button + prev/next arrows |
 | `LocationTypeCell` | `location-cells.tsx` | Location type icon + label |
 | `MeetingPlaceIcon` | `location-cells.tsx` | Provider logo tile (Google/Wiggli/Teams/Zoom/manual) |
+| `NotetakerBadge` | `notetaker-badge.tsx` | Mint "AI" chip for meetings with the AI Notetaker enabled |
 
 ## Typical new page
 

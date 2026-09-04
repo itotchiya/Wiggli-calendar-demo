@@ -9,6 +9,7 @@ import { Avatar, AvatarStack } from "./ui/avatar";
 import { StatusPill } from "./ui/status-pill";
 import { LocationTypeCell, MeetingPlaceIcon } from "./ui/location-cells";
 import { SearchToolbar } from "./ui/toolbar";
+import { NotetakerBadge } from "./ui/notetaker-badge";
 
 export { StatusPill, LocationTypeCell, MeetingPlaceIcon };
 
@@ -27,6 +28,8 @@ export type MeetingRow = {
   linkedOrganization?: LinkedOrg;
   attendees: { name: string; avatar?: string; color?: string }[];
   locationType: "Online" | "Another location" | "Company address" | string;
+  /** AI Notetaker enabled — the Wiggli bot joins to record this meeting. */
+  aiNotetaker?: boolean;
   meetingPlace: string;
   meetingPlaceHref?: string;
   meetingPlaceProvider?: "zoom" | "google" | "wiggli" | "custom" | "company" | "teams" | "manual";
@@ -65,7 +68,7 @@ const mockMeetings: MeetingRow[] = [
     linkedContact: { id: "james-whitaker", name: "James Whitaker", avatar: "/avatars/avatar-4.webp" },
     linkedJob: { id: "1597", title: "Frontend Developer 4" },
     attendees: [{ name: "Liam Harper", avatar: "/avatars/avatar-5.webp" }, { name: "James Whitaker" }, { name: "Ava Thompson", avatar: "/avatars/avatar-4.webp" }],
-    locationType: "Online", meetingPlace: "https://meet.google.com/abc-defg-hij", meetingPlaceHref: "https://meet.google.com/abc-defg-hij", meetingPlaceProvider: "google",
+    locationType: "Online", aiNotetaker: true, meetingPlace: "https://meet.google.com/abc-defg-hij", meetingPlaceHref: "https://meet.google.com/abc-defg-hij", meetingPlaceProvider: "google",
     createdOn: "Feb 6, 2029", createdBy: { name: "Liam Harper", avatar: "/avatars/avatar-5.webp" }, updatedOn: "Feb 6, 2029", updatedBy: { name: "Liam Harper", avatar: "/avatars/avatar-5.webp" }
   },
   {
@@ -177,6 +180,7 @@ function buildMeetingPreview(row: MeetingRow): CalendarEventItem {
     title: row.title,
     eventType: normalizeEventType(row.meetingType),
     description: descParts.join(" ") || `${normalizeEventType(row.meetingType)} meeting`,
+    aiNotetaker: row.aiNotetaker === true,
     reminderLabel: "15 minutes",
     statusLabel: row.status,
     organizerName: row.organizer?.name ?? "Axelle Bastin",
@@ -229,6 +233,7 @@ export function MeetingsTable({ filterEntity, filterId, filterName, extraMeeting
     linkedOrganization: e.linkedOrganization,
     attendees: e.attendees || [{ name: "Axelle Bastin" }],
     locationType: e.locationType || "Online",
+    aiNotetaker: e.aiNotetaker === true,
     meetingPlace: e.meetingPlace || e.meetingLink || "",
     meetingPlaceHref: e.meetingLink,
     meetingPlaceProvider: e.provider || "wiggli",
@@ -279,6 +284,7 @@ export function MeetingsTable({ filterEntity, filterId, filterName, extraMeeting
               <th><span>Linked to organization</span><ChevronDown size={13} /></th>
               <th><span>Attendees</span><ChevronDown size={13} /></th>
               <th><span>Location type</span><ChevronDown size={13} /></th>
+              <th><span>AI Notetaker</span><ChevronDown size={13} /></th>
               <th><span>Meeting place</span><ChevronDown size={13} /></th>
               <th><span>Created on</span><ChevronDown size={13} /></th>
               <th><span>Created by</span><ChevronDown size={13} /></th>
@@ -288,7 +294,7 @@ export function MeetingsTable({ filterEntity, filterId, filterName, extraMeeting
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
-              <tr><td colSpan={19} style={{ textAlign: "center", padding: "32px 16px", color: "#64748b", fontSize: 13 }}>No meetings found{query ? ` for "${query}"` : ""}</td></tr>
+              <tr><td colSpan={20} style={{ textAlign: "center", padding: "32px 16px", color: "#64748b", fontSize: 13 }}>No meetings found{query ? ` for "${query}"` : ""}</td></tr>
             ) : filteredRows.map((row) => (
               <tr key={row.ref} tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest("input, button, a")) openPreview(row); }} onKeyDown={(e) => { if (e.key === "Enter") openPreview(row); }} style={{ cursor: "pointer" }}>
                 <td className="jobs-table-menu-col" onClick={(e) => e.stopPropagation()} style={{ width: 80, minWidth: 80, maxWidth: 80 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><input type="checkbox" style={{ width: 16, height: 16, accentColor: "#0f766e" }} /><button aria-label="row" style={{ border: 0, background: "transparent", color: "#94a3b8", display: "grid", placeItems: "center", width: 24, height: 24 }}><MoreHorizontal size={16} /></button></div></td>
@@ -354,6 +360,7 @@ export function MeetingsTable({ filterEntity, filterId, filterName, extraMeeting
                   <AvatarStack names={row.attendees} rowKey={row.ref} />
                 </td>
                 <td><LocationTypeCell type={row.locationType} /></td>
+                <td>{row.aiNotetaker ? <NotetakerBadge /> : <span style={{ color: "#cbd5e1" }}>—</span>}</td>
                 <td>
                   {row.meetingPlace ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>

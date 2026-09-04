@@ -45,6 +45,8 @@ export type EventPreviewData = {
   linkedTo?: { type: string; label: string; avatar?: string }[];
   locations?: { label: string; type?: string }[];
   meetingLinks?: { provider: string; url: string }[];
+  /** AI Notetaker enabled — the Wiggli bot joins to record and take notes. */
+  aiNotetaker?: boolean;
 };
 
 export type EventDto = {

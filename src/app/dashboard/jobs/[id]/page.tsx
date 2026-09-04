@@ -241,6 +241,7 @@ function eventToMeetingRow(event: EventDto, index: number, jobTitle: string) {
     linkedJob: { id: "", title: jobTitle },
     attendees: event.attendees.map((a) => ({ name: a.name ?? a.email })),
     locationType: meetLink ? "Online" : "Company address",
+    aiNotetaker: event.previewData?.aiNotetaker === true,
     meetingPlace: meetLink || (event.location ?? ""),
     meetingLink: meetLink,
     provider: meetLink ? "google" : "company",

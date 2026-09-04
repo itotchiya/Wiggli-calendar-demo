@@ -76,6 +76,7 @@ export default function SingleCandidatePage() {
           linkedCandidate: { id, name, avatar: "" },
           attendees: e.attendees.map((a) => ({ name: a.name ?? a.email })),
           locationType: e.hangoutLink ? "Online" : "Company address",
+          aiNotetaker: e.previewData?.aiNotetaker === true,
           meetingPlace: e.hangoutLink ?? e.location ?? "",
           meetingLink: e.hangoutLink ?? "",
           provider: e.hangoutLink ? "google" : "company",
