@@ -43,8 +43,8 @@ type NavItem = { label: string; icon: IconType; href?: string; children?: NavChi
 const navItems: NavItem[] = [
   { label: "Home", icon: Home },
   { label: "Tasks", icon: ClipboardList },
-  { label: "Jobs", icon: BriefcaseBusiness },
-  { label: "Permanent", icon: Armchair, children: [{ label: "Candidates" }, { label: "Notes" }] },
+  { label: "Jobs", icon: BriefcaseBusiness, href: "/dashboard/jobs" },
+  { label: "Permanent", icon: Armchair, children: [{ label: "Candidates", href: "/dashboard/candidates" }, { label: "Notes" }] },
   { label: "Temporary", icon: Hourglass, children: [{ label: "Missions" }, { label: "Timesheets" }] },
   { label: "Organizations", icon: Building2 },
   { label: "Contacts", icon: ContactRound },
@@ -121,7 +121,13 @@ export function Sidebar() {
               )}
               {expanded && item.children && open && (
                 <div className="nav-children">
-                  {item.children.map((child) => <button key={child.label}>{child.label}</button>)}
+                  {item.children.map((child) =>
+                    child.href ? (
+                      <Link key={child.label} href={child.href} className={pathname.startsWith(child.href) ? "active" : ""}>{child.label}</Link>
+                    ) : (
+                      <button key={child.label} type="button">{child.label}</button>
+                    )
+                  )}
                 </div>
               )}
             </div>

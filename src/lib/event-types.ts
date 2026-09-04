@@ -15,6 +15,17 @@ export const defaultEventTypes: EventTypeDefinition[] = [
   { id: "job-intake", name: "Job intake", description: "A discussion to gather requirements, responsibilities, expectations, and hiring needs for a job opening." },
 ];
 
+/** Keep event labels consistent wherever records are rendered in the product. */
+export function normalizeEventType(value?: string | null): string {
+  const type = value?.trim().toLowerCase();
+  if (!type) return "Meeting";
+  if (type === "interview" || type.includes("interview")) return "Interview";
+  if (type === "call" || type.includes("call")) return "Call";
+  if (type === "job intake" || type === "job-intake" || type.includes("job intake")) return "Job intake";
+  if (type === "meeting" || type.includes("meeting")) return "Meeting";
+  return value!.trim();
+}
+
 const STORAGE_KEY = "wiggli-event-types:v3";
 const PREVIOUS_STORAGE_KEY = "wiggli-event-types:v2";
 const LEGACY_STORAGE_KEY = "wiggli-event-types:v1";
