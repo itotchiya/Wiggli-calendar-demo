@@ -339,6 +339,15 @@ export function EventPreviewDialog({
           <span className="preview-event-type-pill">{event.eventType ?? "Meeting"}</span>
         </div>}
 
+        {event.aiNotetaker === true && (
+          <div className="preview-meta-grid">
+            <div className="preview-meta">
+              <span className="preview-meta-label"><Mic size={16} /> AI Notetaker</span>
+              <NotetakerBadge label="AI will join" title="The AI Notetaker joins at the meeting time — you'll need to admit it from the lobby to start taking notes." />
+            </div>
+          </div>
+        )}
+
         <div className="preview-meta-grid">
           <div className="preview-meta">
             <span className="preview-meta-label"><UserRound size={16} /> Organizer</span>
@@ -380,16 +389,6 @@ export function EventPreviewDialog({
         {locations.length > 0 && <PreviewSection icon={<MapPin size={16} />} title="Location"><div className="preview-locations">{locations.map((location) => <LocationRow key={`${location.type ?? "location"}-${location.label}`} location={location} />)}</div></PreviewSection>}
 
         {meetingLinks.length > 0 && <PreviewSection icon={<Link2 size={16} />} title="Meeting link"><div className="preview-meeting-links">{meetingLinks.map((link) => <MeetingLinkRow key={`${link.provider}-${link.url}`} link={link} />)}</div></PreviewSection>}
-
-        {event.aiNotetaker === true && (
-          <div className="preview-section">
-            <span className="preview-meta-label"><Mic size={16} /> AI Notetaker</span>
-            <div className="preview-notetaker-card">
-              <NotetakerBadge label="Wiggli Notetaker" />
-              <p className="preview-notetaker-note">The bot joins this meeting to record, transcribe and draft AI notes. Admit "Wiggli Notetaker" from the lobby when it joins.</p>
-            </div>
-          </div>
-        )}
 
         <div className="preview-section">
           <span className="preview-meta-label"><MessageSquareText size={16} /> Description</span>

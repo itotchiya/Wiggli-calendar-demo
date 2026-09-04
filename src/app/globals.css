@@ -1365,8 +1365,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .preview-url-action.copied { color: #15803d; }
 .preview-url-external { opacity: 0; }
 .preview-description { padding: 12px 14px; border-radius: 9px; background: #f8fafc; color: #475569; font-size: 12.5px; line-height: 1.6; }
-.preview-notetaker-card { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 12px 14px; border-radius: 9px; background: #f0fdf7; border: 1px solid #b3f0d2; }
-.preview-notetaker-note { margin: 0; color: #0a8a54; font-size: 12.5px; line-height: 1.5; }
 .preview-declined-bar { margin-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; border-top: 1px solid #eef2f6; }
 .preview-sync-error { margin-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 0; border-top: 1px solid #eef2f6; color: #c62a30; font-size: 12px; font-weight: 600; }
 .preview-sync-error > span { display: inline-flex; align-items: center; gap: 6px; }
