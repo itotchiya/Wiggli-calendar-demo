@@ -49,6 +49,15 @@ export async function createNotetakerBot(input: CreateBotInput): Promise<RecallB
       meeting_url: input.meetingUrl,
       join_at: input.joinAt,
       bot_name: "Wiggli Notetaker",
+      // Leave behavior: stop recording + leave 60s after everyone is gone
+      // (60s grace so brief drops don't kill the bot; ignored in the first
+      // minute while people are still joining). Cap idle burns: nobody joins
+      // within 10 min, or never admitted within 10 min → leave.
+      automatic_leave: {
+        everyone_left_timeout: { timeout: 60, activate_after: 60 },
+        noone_joined_timeout: 600,
+        waiting_room_timeout: 600,
+      },
       chat: {
         on_bot_join: {
           send_to: "everyone",

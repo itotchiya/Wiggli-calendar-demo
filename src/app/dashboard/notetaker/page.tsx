@@ -51,8 +51,10 @@ export default function NotetakerPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testUrl, setTestUrl] = useState("");
+  const [testEventId, setTestEventId] = useState("");
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [testNoteId, setTestNoteId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [loading, setLoading] = useState(true);
@@ -110,16 +112,23 @@ export default function NotetakerPage() {
     if (!testUrl.trim() || testBusy) return;
     setTestBusy(true);
     setTestResult(null);
+    setTestNoteId(null);
     try {
       const res = await fetch("/api/notetaker/test-join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ meetingUrl: testUrl.trim() }),
+        body: JSON.stringify({ meetingUrl: testUrl.trim(), eventId: testEventId || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      if (!res.ok) {
+        if (data.noteId) setTestNoteId(String(data.noteId));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
       const botId = String(data.bot?.id ?? "unknown");
-      setTestResult(`Bot sent — id ${botId}. Open the Meet now and admit “Wiggli Notetaker” from the lobby.`);
+      if (data.noteId) setTestNoteId(String(data.noteId));
+      setTestResult(
+        `Bot sent — id ${botId}. Open the Meet now and admit “Wiggli Notetaker” from the lobby. When everyone leaves, it stops recording and the summary lands on the note.`
+      );
       showToast("Test bot sent — admit it in the Meet.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Test join failed";
@@ -326,8 +335,28 @@ export default function NotetakerPage() {
                   }}
                 />
                 {testResult && (
-                  <p className="mt-3 rounded-xl bg-slate-100 p-3 text-[12.5px] leading-relaxed text-slate-700">{testResult}</p>
+                  <div className="mt-3 rounded-xl bg-slate-100 p-3 text-[12.5px] leading-relaxed text-slate-700">
+                    {testResult}
+                    {testNoteId && (
+                      <Link href={`/dashboard/notetaker/${testNoteId}`} className="mt-1 block font-bold text-teal-700 underline">
+                        Open the note →
+                      </Link>
+                    )}
+                  </div>
                 )}
+                <label className="mt-3 block text-[12px] font-semibold text-slate-500">
+                  Attach to event <span className="font-normal">(optional — needed for the summary)</span>
+                </label>
+                <select
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[13px] outline-none focus:border-teal-600 focus:bg-white"
+                  value={testEventId}
+                  onChange={(e) => setTestEventId(e.target.value)}
+                >
+                  <option value="">No event — connectivity test only</option>
+                  {events.map((e) => (
+                    <option key={e.id} value={e.id}>{e.summary}</option>
+                  ))}
+                </select>
                 <div className="mt-4 flex justify-end gap-2">
                   <button type="button" className="text-button" onClick={() => setTestOpen(false)}>Close</button>
                   <button type="button" className="primary-button" disabled={testBusy || !testUrl.trim()} onClick={() => void testJoin()}>
