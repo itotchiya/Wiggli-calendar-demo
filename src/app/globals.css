@@ -1285,7 +1285,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .preview-title { margin: 8px 0 18px; font-size: 17px; font-weight: 600; color: #273246; display: flex; align-items: center; gap: 8px; }
 .preview-title a { color: #5b6678; display: inline-flex; }
 .preview-event-type-row { margin: -6px 0 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.preview-event-type-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: #f8fafc; border: 1.5px solid #cbd5e1; color: #475569; font-size: 12px; font-weight: 600; }
+.preview-event-type-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: #f8fafc; border: 1.5px solid #cbd5e1; color: #475569; font-size: 12px; font-weight: 600; white-space: nowrap; width: fit-content; min-width: 0; }
 .preview-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; margin-bottom: 18px; }
 .preview-meta { display: flex; flex-direction: column; gap: 6px; }
 .preview-meta-label { display: flex; align-items: center; gap: 6px; color: #5b6678; font-size: 12.5px; font-weight: 500; }
