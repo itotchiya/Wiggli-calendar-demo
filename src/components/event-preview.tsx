@@ -333,35 +333,48 @@ export function EventPreviewDialog({
           {event.eventUrl && <a href={event.eventUrl} target="_blank" rel="noreferrer" aria-label="Open meeting link"><ExternalLink size={16} /></a>}
         </h2>
 
-        {!isGoogleEvent && <div className="preview-meta-grid">
-          <div className="preview-meta">
-            <span className="preview-meta-label"><Tag size={16} /> Event type</span>
-            <span className="preview-event-type-pill">{event.eventType ?? "Meeting"}</span>
-          </div>
-          {event.aiNotetaker === true && (
-            <div className="preview-meta">
-              <span className="preview-meta-label"><Mic size={16} /> AI Notetaker</span>
-              <span className="preview-organizer" title="The AI Notetaker joins at the meeting time — you'll need to admit it from the lobby to take notes.">
-                <img src="/notetaker-logo.jpeg" alt="Wiggli AI Notetaker" width={32} height={32} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flex: "none" }} />
-                <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
-                  <span>Wiggli AI Notetaker</span>
-                  <span style={{ fontSize: 11, fontWeight: 400, color: "#718096" }}>Will join in time and need your admit</span>
+        {/* Meta order: Organizer → Event type, then AI Notetaker + Status when enabled. */}
+        {event.aiNotetaker === true ? (
+          <>
+            {!isGoogleEvent && <div className="preview-meta-grid">
+              <div className="preview-meta">
+                <span className="preview-meta-label"><UserRound size={16} /> Organizer</span>
+                <span className="preview-organizer"><PreviewOrganizerAvatar name={event.organizerName} initials={event.organizerInitials} avatar={event.organizerAvatar} />{event.organizerName}</span>
+              </div>
+              <div className="preview-meta">
+                <span className="preview-meta-label"><Tag size={16} /> Event type</span>
+                <span className="preview-event-type-pill">{event.eventType ?? "Meeting"}</span>
+              </div>
+            </div>}
+            {!isGoogleEvent && <div className="preview-meta-grid">
+              <div className="preview-meta">
+                <span className="preview-meta-label"><Mic size={16} /> AI Notetaker</span>
+                <span className="preview-organizer" title="The AI Notetaker joins at the meeting time — you'll need to admit it from the lobby to take notes.">
+                  <img src="/notetaker-logo.jpeg" alt="Wiggli AI Notetaker" width={32} height={32} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flex: "none" }} />
+                  <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
+                    <span>Wiggli AI Notetaker</span>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: "#718096" }}>Will join in time and need your admit</span>
+                  </span>
                 </span>
-              </span>
+              </div>
+              <div className="preview-meta">
+                <span className="preview-meta-label"><CalendarDays size={16} /> Status <span className="preview-info-icon" title="Live event status"><Info size={12} /></span></span>
+                <span className={`preview-status-pill ${isCancelled ? "cancelled" : statusClassName}`}>{event.statusLabel ?? "Scheduled"}</span>
+              </div>
+            </div>}
+          </>
+        ) : (
+          <div className="preview-meta-grid">
+            {!isGoogleEvent && <div className="preview-meta">
+              <span className="preview-meta-label"><UserRound size={16} /> Organizer</span>
+              <span className="preview-organizer"><PreviewOrganizerAvatar name={event.organizerName} initials={event.organizerInitials} avatar={event.organizerAvatar} />{event.organizerName}</span>
+            </div>}
+            <div className="preview-meta">
+              <span className="preview-meta-label"><CalendarDays size={16} /> Status <span className="preview-info-icon" title="Live event status"><Info size={12} /></span></span>
+              <span className={`preview-status-pill ${isCancelled ? "cancelled" : statusClassName}`}>{event.statusLabel ?? "Scheduled"}</span>
             </div>
-          )}
-        </div>}
-
-        <div className="preview-meta-grid">
-          <div className="preview-meta">
-            <span className="preview-meta-label"><UserRound size={16} /> Organizer</span>
-            <span className="preview-organizer"><PreviewOrganizerAvatar name={event.organizerName} initials={event.organizerInitials} avatar={event.organizerAvatar} />{event.organizerName}</span>
           </div>
-          <div className="preview-meta">
-            <span className="preview-meta-label"><CalendarDays size={16} /> Status <span className="preview-info-icon" title="Live event status"><Info size={12} /></span></span>
-            <span className={`preview-status-pill ${isCancelled ? "cancelled" : statusClassName}`}>{event.statusLabel ?? "Scheduled"}</span>
-          </div>
-        </div>
+        )}
 
         <div className="preview-meta-grid">
           <div className="preview-meta">
