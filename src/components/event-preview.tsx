@@ -34,7 +34,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import type { CalendarAttendee, CalendarEventItem } from "@/lib/calendar-types";
 import { getCalendarTime } from "@/lib/datetime-proto";
-import { NotetakerBadge } from "./ui/notetaker-badge";
 
 function PreviewAttendeeAvatar({ attendee, defaultAvatar = false }: { attendee: CalendarAttendee; defaultAvatar?: boolean }) {
   const [failed, setFailed] = useState(false);
@@ -334,19 +333,24 @@ export function EventPreviewDialog({
           {event.eventUrl && <a href={event.eventUrl} target="_blank" rel="noreferrer" aria-label="Open meeting link"><ExternalLink size={16} /></a>}
         </h2>
 
-        {!isGoogleEvent && <div className="preview-event-type-row">
-          <span className="preview-meta-label"><Tag size={16} /> Event type</span>
-          <span className="preview-event-type-pill">{event.eventType ?? "Meeting"}</span>
-        </div>}
-
-        {event.aiNotetaker === true && (
-          <div className="preview-meta-grid">
+        {!isGoogleEvent && <div className="preview-meta-grid">
+          <div className="preview-meta">
+            <span className="preview-meta-label"><Tag size={16} /> Event type</span>
+            <span className="preview-event-type-pill">{event.eventType ?? "Meeting"}</span>
+          </div>
+          {event.aiNotetaker === true && (
             <div className="preview-meta">
               <span className="preview-meta-label"><Mic size={16} /> AI Notetaker</span>
-              <NotetakerBadge label="AI will join" title="The AI Notetaker joins at the meeting time — you'll need to admit it from the lobby to start taking notes." />
+              <span className="preview-organizer" title="The AI Notetaker joins at the meeting time — you'll need to admit it from the lobby to take notes.">
+                <img src="/notetaker-logo.jpeg" alt="Wiggli AI Notetaker" width={32} height={32} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flex: "none" }} />
+                <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
+                  <span>Wiggli AI Notetaker</span>
+                  <span style={{ fontSize: 11, fontWeight: 400, color: "#718096" }}>Will join in time and need your admit</span>
+                </span>
+              </span>
             </div>
-          </div>
-        )}
+          )}
+        </div>}
 
         <div className="preview-meta-grid">
           <div className="preview-meta">
