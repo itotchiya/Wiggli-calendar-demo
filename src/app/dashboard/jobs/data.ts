@@ -1,3 +1,5 @@
+import { candidateDirectory } from "@/lib/attendee-directory";
+
 export type JobRow = {
   reference: number;
   title: string;
@@ -46,17 +48,17 @@ export const pipelineStages: PipelineStage[] = [
     id: "sourced",
     label: "Sourced",
     candidates: [
-      { id: "c1", initials: "TT", name: "Tuan Tuan Abdullah", role: "Backend Development", date: "25/06/2026", match: 68, color: "#d64560" },
-      { id: "c2", initials: "YG", name: "Yevgen Grechko", role: "Full-Stack Development", date: "23/06/2026", match: 77, color: "#8b5cf6" },
-      { id: "c3", initials: "HH", name: "Hicham Hassan", role: "Frontend Development", date: "23/06/2026", match: 82, color: "#e58bb0" },
-      { id: "c4", initials: "KE", name: "Karim El Fassi", date: "23/06/2026", match: 84, color: "#1e9e6a" },
+      { id: "ethan-patel", initials: "EP", name: "Ethan Patel", role: "Frontend developer", date: "25/06/2026", match: 68, color: "#d64560" },
+      { id: "oliver-schmidt", initials: "OS", name: "Oliver Schmidt", role: "Backend developer", date: "23/06/2026", match: 77, color: "#8b5cf6" },
+      { id: "sofia-morales", initials: "SM", name: "Sofia Morales", role: "Product frontend engineer", date: "23/06/2026", match: 82, color: "#e58bb0" },
+      { id: "jamal-washington", initials: "JW", name: "Jamal Washington", date: "23/06/2026", match: 84, color: "#1e9e6a" },
     ],
   },
   {
     id: "candidate-review",
     label: "Candidate review",
     candidates: [
-      { id: "c5", initials: "OO", name: "Olayiwola O Omitola", role: "Frontend Development", date: "23/06/2026", match: 74, color: "#5b9bd5" },
+      { id: "linh-nguyen", initials: "LN", name: "Linh Nguyen", role: "Engineering recruitment", date: "23/06/2026", match: 74, color: "#5b9bd5" },
     ],
   },
   { id: "interview", label: "Interview", candidates: [] },
@@ -92,20 +94,57 @@ export type CandidateListRow = {
   degree: string;
 };
 
-export const candidateRows: CandidateListRow[] = [
-  { id: "89949590", firstName: "serena", lastName: "El Amrani", workType: "Permanent", jobTitle: "—", email: "serena.elamrani@inc.be", phone: "—", externalProfile: "—", employmentType: "permanent", residence: "—", extraBenefits: "—", category: "—", subCategory: "—", functions: "—", seniority: "—", skills: "—", languages: "—", notes: "No", lastNote: "—", yearsExperience: "—", companies: "—", schools: "—", degree: "—", hasLinkedJob: false },
-  { id: "89949589", firstName: "robert", lastName: "D", workType: "Permanent", jobTitle: "Compliance Assistant", email: "robert.d@inc.com", phone: "NL +316****3377", externalProfile: "—", employmentType: "permanent", residence: "—", extraBenefits: "—", category: "Compliance & Regulatory", subCategory: "Compliance Management", functions: "Export/Import Compliance", seniority: "junior", skills: "—", languages: "—", notes: "No", lastNote: "—", yearsExperience: "—", companies: "—", schools: "—", degree: "—", hasLinkedJob: true },
-  { id: "89949588", firstName: "salma", lastName: "addan", workType: "Permanent", jobTitle: "—", email: "salma.addan@gmail.com", phone: "NL +316****3378", externalProfile: "—", employmentType: "permanent", residence: "—", extraBenefits: "—", category: "—", subCategory: "—", functions: "—", seniority: "—", skills: "—", languages: "—", notes: "No", lastNote: "—", yearsExperience: "—", companies: "—", schools: "—", degree: "—", hasLinkedJob: false },
-  { id: "89949587", firstName: "farah", lastName: "faraj", workType: "Hybrid", jobTitle: "—", email: "fara.faraj@gmail.com", phone: "NL +316****3377", externalProfile: "—", employmentType: "permanent", residence: "—", extraBenefits: "—", category: "—", subCategory: "—", functions: "—", seniority: "—", skills: "—", languages: "—", notes: "No", lastNote: "—", yearsExperience: "—", companies: "—", schools: "—", degree: "—", hasLinkedJob: false },
-  { id: "89949582", firstName: "Amine", lastName: "Ouaziz", workType: "Freelance", jobTitle: "Embedded Software Engineer", email: "—", phone: "—", externalProfile: "—", employmentType: "—", residence: "Casablanca, Morocco", extraBenefits: "Java", category: "ICT (+1)", subCategory: "Software Development", functions: "Embedded Systems Development", seniority: "medior (+1)", skills: "Python 4/5; Agile Methodologies 4/5; Unit Testing", languages: "Arabic 5/5; English 4/5; French 4/5", notes: "No", lastNote: "—", yearsExperience: "4 years", companies: "Vitesco Technologies", schools: "Faculté Des Sciences Et", degree: "Master's; Bachelor's", hasLinkedJob: true },
-  { id: "89949328", firstName: "hussain", lastName: "ahmed", workType: "Permanent", jobTitle: "Senior Backend Developer", email: "—", phone: "—", externalProfile: "LinkedIn profile", employmentType: "—", residence: "Pakistan", extraBenefits: "Java", category: "ICT", subCategory: "Software Development", functions: "Backend Development", seniority: "senior", skills: "PHP 5/5; CodeIgniter 5/5; Laravel 5/5; Java", languages: "English 3/5", notes: "No", lastNote: "—", yearsExperience: "6 years", companies: "Emtiyaz Soft; PixelSoft", schools: "—", degree: "—", hasLinkedJob: true },
-  { id: "89949230", firstName: "hitesh", lastName: "kumar", workType: "Permanent", jobTitle: "Backend Developer", email: "—", phone: "—", externalProfile: "LinkedIn profile", employmentType: "permanent", residence: "Kitchener, Canada", extraBenefits: "—", category: "ICT", subCategory: "Software Development", functions: "Backend Development", seniority: "senior", skills: "Python 3/5; JavaScript 3/5; TypeScript 3/5", languages: "English 4/5", notes: "No", lastNote: "—", yearsExperience: "—", companies: "—", schools: "—", degree: "—", hasLinkedJob: true },
-  { id: "89949200", firstName: "aleksey", lastName: "zhylko", workType: "Permanent", jobTitle: "Senior PHP Developer", email: "—", phone: "—", externalProfile: "LinkedIn profile", employmentType: "permanent", residence: "Kyiv, Ukraine", extraBenefits: "—", category: "ICT", subCategory: "Software Development", functions: "Backend Development", seniority: "senior", skills: "PHP 5/5; Laravel 4/5; Symfony 3/5; MySQL", languages: "English 4/5; Russian 4/5", notes: "No", lastNote: "—", yearsExperience: "6 years", companies: "Sportlabs Group; Vseos", schools: "—", degree: "—", hasLinkedJob: true },
-  { id: "89949422", firstName: "oleksandr", lastName: "t", workType: "Permanent", jobTitle: "Full-Stack Developer", email: "—", phone: "—", externalProfile: "LinkedIn profile", employmentType: "permanent", residence: "Ukraine", extraBenefits: "—", category: "ICT", subCategory: "Software Development", functions: "Full-Stack Development", seniority: "senior", skills: "PHP 5/5; JavaScript 4/5; SQL 4/5; MySQL 4/5", languages: "English 4/5; Ukrainian 5/5", notes: "Yes", lastNote: "OVERALL ASSESSMENT", yearsExperience: "4 years", companies: "LABELPLATFORM; NEW", schools: "—", degree: "—", hasLinkedJob: true },
-  { id: "89949385", firstName: "tuan", lastName: "tuan abdullah", workType: "—", jobTitle: "—", email: "—", phone: "—", externalProfile: "LinkedIn profile", employmentType: "permanent", residence: "Malaysia", extraBenefits: "—", category: "ICT", subCategory: "Software Development", functions: "Backend Development", seniority: "senior", skills: "Python 4/5; Java 4/5; JavaScript 4/5; React", languages: "English 4/5", notes: "Yes", lastNote: "OVERALL ASSESSMENT", yearsExperience: "—", companies: "—", schools: "—", degree: "—", hasLinkedJob: false },
-  { id: "89949245", firstName: "nikol", lastName: "paraskova", workType: "Permanent", jobTitle: "Junior Backend Developer", email: "—", phone: "—", externalProfile: "LinkedIn profile", employmentType: "permanent", residence: "Sofia, Bulgaria", extraBenefits: "—", category: "ICT", subCategory: "Software Development", functions: "Backend Development", seniority: "junior", skills: "PHP 5/5; MySQL 4/5; CSS 3/5; HTML 3/5", languages: "English 4/5; Bulgarian 5/5; German 1/5", notes: "Yes", lastNote: "test", yearsExperience: "1 years", companies: "Pontica Solutions; Trad", schools: "University of Lincoln", degree: "Master of Science; Bachelor's", hasLinkedJob: true },
-  { id: "89949560", firstName: "Radouane", lastName: "Ouledmoussa", workType: "Permanent", jobTitle: "Senior Java Developer", email: "—", phone: "—", externalProfile: "—", employmentType: "permanent", residence: "Morocco", extraBenefits: "—", category: "ICT", subCategory: "Software Development", functions: "Backend Development", seniority: "senior", skills: "Java 5/5; Spring Boot 4/5; Jenkins 4/5; Oracle", languages: "Arabic 5/5; French 5/5; English 4/5; German", notes: "Yes", lastNote: "OVERALL ASSESSMENT", yearsExperience: "14 years", companies: "Java Community Process", schools: "Institut Supérieur De Gé", degree: "Multimedia Avionics", hasLinkedJob: true },
-];
+/**
+ * Candidates page list — derived from the SHARED attendee directory
+ * (`src/lib/attendee-directory.ts`) so the drawer, pipeline, and this table all
+ * show the same people with the same invitation emails. Extra profile fields
+ * are presentation-only garnish; identity (name/email/avatar) comes from the
+ * directory.
+ */
+const candidateGarnish: Record<string, Partial<CandidateListRow>> = {
+  "ethan-patel": { phone: "NL +316****3377", residence: "Brussels, Belgium", functions: "Frontend Development", seniority: "senior", skills: "React 5/5; TypeScript 4/5; CSS 4/5", languages: "English 5/5; French 4/5", yearsExperience: "6 years" },
+  "oliver-schmidt": { phone: "DE +4915****8821", residence: "Berlin, Germany", functions: "Backend Development", seniority: "senior", skills: "Node.js 5/5; PostgreSQL 4/5; GraphQL 4/5", languages: "English 5/5; German 5/5", yearsExperience: "7 years" },
+  "sofia-morales": { phone: "ES +346****4402", residence: "Madrid, Spain", functions: "Frontend Development", seniority: "medior", skills: "Vue 4/5; JavaScript 4/5; Accessibility 3/5", languages: "Spanish 5/5; English 4/5", yearsExperience: "4 years" },
+  "jamal-washington": { externalProfile: "—", residence: "Chicago, USA", workType: "Hybrid" },
+  "linh-nguyen": { phone: "VN +84***2201", residence: "Ho Chi Minh City, Vietnam", functions: "Full-Stack Development", seniority: "medior", skills: "TypeScript 4/5; React 4/5; Node.js 3/5", languages: "English 4/5; Vietnamese 5/5", yearsExperience: "3 years" },
+  "ava-thompson": { phone: "UK +44****912", residence: "Manchester, UK", functions: "Product Design", seniority: "senior", skills: "Figma 5/5; Design Systems 4/5", languages: "English 5/5", yearsExperience: "5 years" },
+  "linksomoney": { externalProfile: "—", residence: "Antwerp, Belgium" },
+  "luxqoox-candidate": { externalProfile: "—", residence: "Brussels, Belgium", workType: "Freelance" },
+  "nadia-benali": { phone: "MA +212***558", residence: "Casablanca, Morocco", functions: "Product Design", seniority: "medior", skills: "Figma 4/5; Prototyping 4/5; Research 3/5", languages: "Arabic 5/5; French 5/5; English 4/5", yearsExperience: "4 years" },
+  "lucas-martin": { phone: "FR +337****6120", residence: "Lyon, France", functions: "Backend Development", seniority: "junior", skills: "Python 3/5; Django 3/5", languages: "French 5/5; English 4/5", yearsExperience: "2 years" },
+};
+
+export const candidateRows: CandidateListRow[] = candidateDirectory.map((person, index) => {
+  const [firstName, ...rest] = person.name.split(" ");
+  const lastName = rest.join(" ") || "—";
+  const garnish = candidateGarnish[person.id] ?? {};
+  return {
+    id: person.id,
+    firstName,
+    lastName,
+    workType: garnish.workType ?? "Permanent",
+    email: person.email, // identical to what the drawer invites
+    phone: garnish.phone ?? "—",
+    hasLinkedJob: (person.links?.length ?? 0) > 0,
+    jobTitle: person.links?.[0]?.title ?? "—",
+    externalProfile: garnish.externalProfile ?? "LinkedIn profile",
+    employmentType: "permanent",
+    residence: garnish.residence ?? "—",
+    extraBenefits: "—",
+    category: garnish.category ?? "ICT",
+    subCategory: garnish.subCategory ?? "Software Development",
+    functions: garnish.functions ?? "—",
+    seniority: garnish.seniority ?? "—",
+    skills: garnish.skills ?? "—",
+    languages: garnish.languages ?? "—",
+    notes: "No",
+    lastNote: "—",
+    yearsExperience: garnish.yearsExperience ?? "—",
+    companies: "—",
+    schools: "—",
+    degree: "—",
+  };
+});
 
 export function findCandidate(id: string): CandidateListRow {
   return candidateRows.find((c) => c.id === id) ?? {

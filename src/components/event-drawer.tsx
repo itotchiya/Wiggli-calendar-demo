@@ -67,6 +67,8 @@ import {
   formatPickerLabel,
   parseDateKey,
 } from "@/lib/datetime-proto";
+import { candidateDirectory as sharedCandidateDirectory } from "@/lib/attendee-directory";
+const candidateDirectory = sharedCandidateDirectory;
 
 type IconType = React.ComponentType<{ size?: number; strokeWidth?: number }>;
 
@@ -162,19 +164,9 @@ const INTERNAL_TEST_EMAILS = ["luxqoox@gmail.com", "mustapha@wiggli.io"] as cons
 const randFrom = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 const attendeeDirectory: Record<AttendeeType, AttendeePerson[]> = {
-  candidate: [
-    ["linksomoney", "Links Omoney", randFrom(TEST_EMAILS)],
-    // Keep one stable Outlook recipient available for calendar sync testing.
-    ["luxqoox-candidate", "Lux Qoox", "must-boufous@outlook.com"],
-    ["ava-thompson", "Ava Thompson", randFrom(TEST_EMAILS)],
-    ["ethan-patel", "Ethan Patel", randFrom(TEST_EMAILS)],
-    ["sofia-morales", "Sofia Morales", randFrom(TEST_EMAILS)],
-    ["jamal-washington", "Jamal Washington", randFrom(TEST_EMAILS)],
-    ["linh-nguyen", "Linh Nguyen", randFrom(TEST_EMAILS)],
-    ["oliver-schmidt", "Oliver Schmidt", randFrom(TEST_EMAILS)],
-    ["nadia-benali", "Nadia Benali", randFrom(TEST_EMAILS)],
-    ["lucas-martin", "Lucas Martin", randFrom(TEST_EMAILS)],
-  ].map(([id, name, email], index) => ({ id, name, email, type: "candidate" as const, avatar: `/avatars/avatar-${index + 1}.webp`, links: candidateLinks[id] })),
+  // Candidates come from the shared directory (single source of truth — same
+  // list/emails drive the pipeline board and candidates pages).
+  candidate: candidateDirectory,
   contact: [
     ["linksomoney-contact", "Links Omoney", "linksomoney@gmail.com"],
     ["luxqoox-contact", "Lux Qoox", "linksomoney@gmail.com"],
