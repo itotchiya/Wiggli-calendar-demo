@@ -387,6 +387,12 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
   const pickerRef = useRef<HTMLDivElement>(null);
   const typeIcons: Record<AttendeeType, IconType> = { candidate: UserRound, contact: ContactRound, internal: UsersRound };
   const activePeople = menu && menu !== "types" ? attendeeDirectory[menu].filter((person) => `${person.name} ${person.email}`.toLowerCase().includes(query.toLowerCase())) : [];
+  // Testing aid: typing any email offers it as an attendee, no directory entry needed.
+  const typedEmail = query.trim().toLowerCase();
+  const manualPerson: AttendeePerson | null =
+    menu && menu !== "types" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typedEmail) && !activePeople.some((person) => person.email.toLowerCase() === typedEmail)
+      ? { id: `manual-${typedEmail}`, name: typedEmail.split("@")[0]!, email: typedEmail, type: menu, avatar: "" }
+      : null;
 
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
@@ -428,13 +434,17 @@ function AttendeePicker({ selected, onSelect, onRemove, disabled = false }: { se
       {menu && menu !== "types" && (
         <div className="attendee-people-menu">
           <div className="attendee-menu-heading"><strong>Add {attendeeTypeLabels[menu].toLowerCase()}</strong><button type="button" onClick={() => { setMenu("types"); setQuery(""); }}>Change type</button></div>
-          <label className="attendee-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" aria-label={`Search ${attendeeTypeLabels[menu].toLowerCase()}`} /><Search size={18} /></label>
+          <label className="attendee-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search or type an email" aria-label={`Search ${attendeeTypeLabels[menu].toLowerCase()}`} /><Search size={18} /></label>
           <div className="attendee-results">
+            {manualPerson && (() => {
+              const alreadySelected = selected.some((item) => item.email.toLowerCase() === manualPerson.email);
+              return <button type="button" disabled={alreadySelected} onClick={() => { onSelect(manualPerson); setMenu(null); setQuery(""); }} aria-label={`Add ${manualPerson.email}`}><span className="attendee-avatar" style={{ background: "#e8f3f0", color: "#1f7a64" }}><Plus size={16} /></span><span style={{ gap: 1 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>Add &quot;{manualPerson.email}&quot;</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>Use this email as {attendeeTypeLabels[menu as AttendeeType].toLowerCase()}</small></span>{alreadySelected && <Check size={16} />}</button>;
+            })()}
             {activePeople.map((person) => {
               const alreadySelected = selected.some((item) => item.id === person.id);
               return <button type="button" disabled={alreadySelected} onClick={() => { onSelect(person); setMenu(null); setQuery(""); }} aria-label={`Select ${person.name}`} key={person.id}><AttendeeAvatar name={person.name} avatar={person.avatar} /><span style={{ gap: 1 }}><strong style={{ fontSize: 13, lineHeight: 1.2 }}>{person.name}</strong><small style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2 }}>{person.email}</small></span>{alreadySelected && <Check size={16} />}</button>;
             })}
-            {activePeople.length === 0 && <p>No attendees found.</p>}
+            {activePeople.length === 0 && !manualPerson && <p>{query.trim() ? "No attendees found. Type a full email to add it." : "No attendees found."}</p>}
           </div>
         </div>
       )}

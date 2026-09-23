@@ -47,3 +47,23 @@ export const TIMEZONES: string[] = [
   "America/Toronto",
   "America/Vancouver",
 ];
+
+/**
+ * Google can report zones like "GMT+01:00" that Intl rejects. Map whole-hour
+ * offsets to Etc/GMT∓N (POSIX sign is inverted) and anything else to UTC.
+ */
+export function safeTimeZone(timezone: string | null | undefined): string {
+  if (!timezone) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: timezone });
+    return timezone;
+  } catch {
+    const match = /^(?:GMT|UTC)\s*([+-])(\d{1,2})(?::?(\d{2}))?$/i.exec(timezone.trim());
+    if (match && (!match[3] || match[3] === "00")) {
+      const hours = Number(match[2]);
+      if (hours === 0) return "UTC";
+      return `Etc/GMT${match[1] === "+" ? "-" : "+"}${hours}`;
+    }
+    return "UTC";
+  }
+}

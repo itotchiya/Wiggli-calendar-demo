@@ -20,6 +20,7 @@ import { EventDrawer, type EventMeta, type TimedDate } from "@/components/event-
 import { EventPreviewDialog } from "@/components/event-preview";
 import type { CalendarEventItem, PreviewStatus } from "@/lib/calendar-types";
 import { notifyIfGoogleSessionExpired } from "@/lib/google-session-client";
+import { safeTimeZone } from "@/lib/timezones";
 import type { EventDto } from "@/types/event";
 import {
   addDays,
@@ -42,7 +43,7 @@ const HOUR_PX = 120;
 
 function eventDateParts(iso: string, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

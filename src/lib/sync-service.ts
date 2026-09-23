@@ -7,6 +7,7 @@ import {
 } from "./google/calendar";
 import { withFreshGoogleClient } from "./google-auth";
 import { zonedWallClockToUtc } from "./datetime";
+import { safeTimeZone } from "./timezones";
 
 /**
  * Pull authoritative RSVP statuses from Google Calendar into SQLite.
@@ -218,7 +219,7 @@ async function upsertGoogleCalendarEvent(
   const cancelled = remote.status === "cancelled";
   if (cancelled && !existing) return "ignored";
 
-  const timezone = remote.start?.timeZone || remote.end?.timeZone || "Africa/Casablanca";
+  const timezone = safeTimeZone(remote.start?.timeZone || remote.end?.timeZone || "Africa/Casablanca");
   const start = parseGoogleBoundary(remote.start, timezone);
   const end = parseGoogleBoundary(remote.end, timezone);
   if (!start || !end || end <= start) {
