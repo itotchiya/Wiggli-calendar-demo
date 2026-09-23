@@ -86,7 +86,12 @@ export type AttendeePerson = { id: string; name: string; email: string; type: At
 
 function multipleDateError(slotCount: number, attendees: AttendeePerson[]): string | null {
   if (slotCount <= 1) return null;
-  return "Multiple slots are only available for one candidate";
+
+  const candidateCount = attendees.filter((person) => person.type === "candidate").length;
+  const hasContact = attendees.some((person) => person.type === "contact");
+
+  if (candidateCount !== 1 || hasContact) return "Multiple slots are only available for one candidate";
+  return null;
 }
 
 const organizations: Record<string, Organization> = {
