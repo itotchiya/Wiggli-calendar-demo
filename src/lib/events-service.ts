@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { db } from "./prisma";
 import { getGoogleClient, createGoogleEvent } from "./google/calendar";
 import { sendInviteEmail } from "./google/gmail";
@@ -677,6 +678,7 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
   }
   const baseTitle = baseDocument.event.title;
   const slotCount = inputs.length;
+  const slotGroupId = randomUUID();
 
   // 2. Create all Google events first (silent when googleSendUpdates === "none").
   const createdEvents: (EventRow & { hangoutLink: string | null })[] = [];
@@ -716,6 +718,7 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
         emailHtml: input.emailHtml ?? null,
         organizerEmail,
         sequence: 0,
+        slotGroupId,
         attendees: {
           create: input.attendees.map((a) => ({
             email: a.email,
@@ -1072,6 +1075,13 @@ export async function createSmartMultiSlotEventsAndInvite(opts: {
               }
             : {}),
         });
+        const slotAttendee = createdEvents[slotIndex]!.attendees.find((item) => item.email === attendee.email);
+        if (slotAttendee) {
+          await db.attendee.update({
+            where: { id: slotAttendee.id },
+            data: { inviteThreadId: sent.threadId ?? null, inviteMessageId: sent.rfcMessageId },
+          });
+        }
         if (!thread.rootMessageId) {
           // First slot email opens the thread — capture Gmail's server-side
           // threadId and the DELIVERED RFC Message-ID for all follow-ups.

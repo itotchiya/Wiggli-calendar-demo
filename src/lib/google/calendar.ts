@@ -137,6 +137,8 @@ export type GoogleCalendarListOptions = {
   timeMin?: Date;
   timeMax?: Date;
   timeZone?: string;
+  /** Only events modified after this instant (incremental sync; includes deletions with showDeleted). */
+  updatedMin?: Date;
 };
 
 /** List the organizer's primary-calendar events, including expanded recurring instances. */
@@ -166,6 +168,7 @@ export async function listGoogleCalendarEventsWithClient(
       ...(options.timeMin ? { timeMin: options.timeMin.toISOString() } : {}),
       ...(options.timeMax ? { timeMax: options.timeMax.toISOString() } : {}),
       ...(options.timeZone ? { timeZone: options.timeZone } : {}),
+      ...(options.updatedMin ? { updatedMin: options.updatedMin.toISOString() } : {}),
       ...(pageToken ? { pageToken } : {}),
     });
     result.push(...((response.data.items ?? []) as GoogleCalendarEventRecord[]).filter((event) => Boolean(event.id)));

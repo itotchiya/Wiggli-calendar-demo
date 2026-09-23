@@ -35,6 +35,23 @@ export type CalendarImportResult = {
 let recentCalendarSync: { at: number; result: CalendarImportResult } | null = null;
 let calendarSyncInFlight: Promise<CalendarImportResult> | null = null;
 
+// Incremental sync cursor per organizer. After one full pull, each poll only
+// asks Google for events modified since the previous pull (updatedMin), so an
+// RSVP click shows up on the next tick instead of after re-reading and
+// re-writing the whole calendar. A periodic full pull catches anything missed.
+const FULL_RESYNC_MS = 10 * 60_000;
+const UPDATED_MIN_OVERLAP_MS = 2 * 60_000;
+const calendarCursors = new Map<string, { lastPullStartedAt: number; lastFullAt: number }>();
+
+type ExistingEvent = Awaited<ReturnType<typeof findExistingEvents>>[number];
+
+function findExistingEvents(googleEventIds: string[]) {
+  return db.event.findMany({
+    where: { googleEventId: { in: googleEventIds } },
+    include: { attendees: true },
+  });
+}
+
 /** Sync one event by local id. Returns null if the event has no Google id. */
 export async function syncEventById(
   accessToken: string,
@@ -111,35 +128,46 @@ function emptySync(): SyncResult {
  * Google are marked source=GOOGLE so the calendar can render them differently.
  */
 export async function syncGoogleCalendar(
-  accessToken: string,
+  accessToken: string | undefined,
   organizerEmail: string,
-  localEventId?: string
+  localEventId?: string,
+  /** Webhook path: pull only events changed since this instant, no shared cursor. */
+  updatedSince?: Date
 ): Promise<CalendarImportResult> {
-  if (!localEventId && recentCalendarSync && Date.now() - recentCalendarSync.at < 12_000) {
+  if (updatedSince) {
+    return withFreshGoogleClient(accessToken, organizerEmail, async (client) =>
+      applyRemoteEvents(await listGoogleCalendarEventsWithClient(client, { updatedMin: updatedSince }), organizerEmail)
+    );
+  }
+  if (!localEventId && recentCalendarSync && Date.now() - recentCalendarSync.at < 5_000) {
     return recentCalendarSync.result;
   }
   if (!localEventId && calendarSyncInFlight) return calendarSyncInFlight;
 
+  const cursorKey = organizerEmail.toLowerCase();
   const operation = withFreshGoogleClient(accessToken, organizerEmail, async (client) => {
     let remoteEvents: GoogleCalendarEventRecord[];
+    const pullStartedAt = Date.now();
+    const cursor = calendarCursors.get(cursorKey);
+    const fullPull = !cursor || pullStartedAt - cursor.lastFullAt > FULL_RESYNC_MS;
     if (localEventId) {
       const local = await db.event.findUnique({ where: { id: localEventId } });
       if (!local?.googleEventId) return emptyCalendarImport();
       remoteEvents = [await getGoogleCalendarEventWithClient(client, local.googleEventId)];
-    } else {
+    } else if (fullPull) {
       remoteEvents = await listGoogleCalendarEventsWithClient(client);
+    } else {
+      remoteEvents = await listGoogleCalendarEventsWithClient(client, {
+        updatedMin: new Date(cursor.lastPullStartedAt - UPDATED_MIN_OVERLAP_MS),
+      });
     }
 
-    const result = emptyCalendarImport();
-    for (const remote of remoteEvents) {
-      try {
-        const outcome = await upsertGoogleCalendarEvent(remote, organizerEmail);
-        if (outcome === "imported") result.importedEvents++;
-        if (outcome === "updated") result.updatedEvents++;
-        if (outcome === "cancelled") result.cancelledEvents++;
-      } catch (error) {
-        result.errors.push(`${remote.summary || remote.id}: ${(error as Error).message}`);
-      }
+    const result = await applyRemoteEvents(remoteEvents, organizerEmail);
+    if (!localEventId && result.errors.length === 0) {
+      calendarCursors.set(cursorKey, {
+        lastPullStartedAt: pullStartedAt,
+        lastFullAt: fullPull ? pullStartedAt : cursor!.lastFullAt,
+      });
     }
     return result;
   });
@@ -155,15 +183,38 @@ export async function syncGoogleCalendar(
   return calendarSyncInFlight;
 }
 
+async function applyRemoteEvents(
+  remoteEvents: GoogleCalendarEventRecord[],
+  organizerEmail: string
+): Promise<CalendarImportResult> {
+  const ids = remoteEvents.map((remote) => remote.id).filter((id): id is string => Boolean(id));
+  const existingById = new Map<string, ExistingEvent>();
+  for (let i = 0; i < ids.length; i += 500) {
+    for (const event of await findExistingEvents(ids.slice(i, i + 500))) {
+      if (event.googleEventId && !existingById.has(event.googleEventId)) existingById.set(event.googleEventId, event);
+    }
+  }
+
+  const result = emptyCalendarImport();
+  for (const remote of remoteEvents) {
+    try {
+      const outcome = await upsertGoogleCalendarEvent(remote, organizerEmail, remote.id ? existingById.get(remote.id) ?? null : null);
+      if (outcome === "imported") result.importedEvents++;
+      if (outcome === "updated") result.updatedEvents++;
+      if (outcome === "cancelled") result.cancelledEvents++;
+    } catch (error) {
+      result.errors.push(`${remote.summary || remote.id}: ${(error as Error).message}`);
+    }
+  }
+  return result;
+}
+
 async function upsertGoogleCalendarEvent(
   remote: GoogleCalendarEventRecord,
-  fallbackOrganizerEmail: string
+  fallbackOrganizerEmail: string,
+  existing: ExistingEvent | null
 ): Promise<"imported" | "updated" | "cancelled" | "ignored"> {
   if (!remote.id) return "ignored";
-  const existing = await db.event.findFirst({
-    where: { googleEventId: remote.id },
-    include: { attendees: true },
-  });
   const cancelled = remote.status === "cancelled";
   if (cancelled && !existing) return "ignored";
 
@@ -197,29 +248,41 @@ async function upsertGoogleCalendarEvent(
   };
   const reminderMinutes = remote.reminders?.overrides?.find((override) => typeof override.minutes === "number")?.minutes ?? null;
   const summary = remote.summary?.trim() || "Untitled event";
-  const status = cancelled ? "CANCELLED" : "SCHEDULED";
+  // A slot cancelled because a sibling slot was accepted stays cancelled even
+  // if this pull read Google just before the delete landed.
+  const status = cancelled || (existing?.slotGroupId && existing.status === "CANCELLED") ? "CANCELLED" : "SCHEDULED";
 
   if (existing) {
     const existingPreview = existing.previewData && typeof existing.previewData === "object" && !Array.isArray(existing.previewData)
       ? existing.previewData as Record<string, unknown>
       : {};
-    await db.event.update({
-      where: { id: existing.id },
-      data: {
-        summary,
-        description: remote.description ?? existing.description,
-        location: remote.location ?? existing.location,
-        start,
-        end,
-        timezone,
-        status,
-        hangoutLink: hangoutLink ?? existing.hangoutLink,
-        reminderMinutes: reminderMinutes ?? existing.reminderMinutes,
-        previewData: existing.source === "WIGGLI" ? { ...existingPreview, meetingLinks: previewData.meetingLinks } : previewData,
-      },
-    });
-    await syncRemoteAttendees(existing.id, existing.attendees, attendees);
-    return cancelled ? "cancelled" : "updated";
+    const data = {
+      summary,
+      description: remote.description ?? existing.description,
+      location: remote.location ?? existing.location,
+      start,
+      end,
+      timezone,
+      status,
+      hangoutLink: hangoutLink ?? existing.hangoutLink,
+      reminderMinutes: reminderMinutes ?? existing.reminderMinutes,
+      previewData: existing.source === "WIGGLI" ? { ...existingPreview, meetingLinks: previewData.meetingLinks } : previewData,
+    };
+    const eventChanged =
+      data.summary !== existing.summary ||
+      data.description !== existing.description ||
+      data.location !== existing.location ||
+      data.start.getTime() !== existing.start.getTime() ||
+      data.end.getTime() !== existing.end.getTime() ||
+      data.timezone !== existing.timezone ||
+      data.status !== existing.status ||
+      data.hangoutLink !== existing.hangoutLink ||
+      data.reminderMinutes !== existing.reminderMinutes ||
+      stableJson(data.previewData) !== stableJson(existing.previewData);
+    if (eventChanged) await db.event.update({ where: { id: existing.id }, data });
+    const attendeesChanged = await syncRemoteAttendees(existing.id, existing.attendees, attendees);
+    if (cancelled) return "cancelled";
+    return eventChanged || attendeesChanged ? "updated" : "ignored";
   }
 
   await db.event.create({
@@ -257,22 +320,25 @@ async function syncRemoteAttendees(
   eventId: string,
   existing: { id: string; email: string; name: string | null; type: string | null; rsvp: string; comment: string | null }[],
   remote: { email: string; name: string | null; rsvp: "NEEDS_ACTION" | "ACCEPTED" | "TENTATIVE" | "DECLINED"; comment: string | null }[]
-) {
+): Promise<boolean> {
+  let changed = false;
   const remoteEmails = new Set(remote.map((attendee) => attendee.email));
-  if (remoteEmails.size > 0) {
-    await db.attendee.deleteMany({ where: { eventId, email: { notIn: [...remoteEmails] } } });
-  } else {
-    await db.attendee.deleteMany({ where: { eventId } });
+  const stale = existing.filter((attendee) => !remoteEmails.has(attendee.email.toLowerCase()));
+  if (stale.length > 0) {
+    await db.attendee.deleteMany({ where: { id: { in: stale.map((attendee) => attendee.id) } } });
+    changed = true;
   }
 
   const existingByEmail = new Map(existing.map((attendee) => [attendee.email.toLowerCase(), attendee]));
   for (const attendee of remote) {
     const current = existingByEmail.get(attendee.email);
     if (current) {
+      const name = attendee.name ?? current.name;
+      if (name === current.name && attendee.rsvp === current.rsvp && attendee.comment === current.comment) continue;
       await db.attendee.update({
         where: { id: current.id },
         data: {
-          name: attendee.name ?? current.name,
+          name,
           rsvp: attendee.rsvp,
           comment: attendee.comment,
           respondedAt: attendee.rsvp !== current.rsvp ? new Date() : undefined,
@@ -281,7 +347,18 @@ async function syncRemoteAttendees(
     } else {
       await db.attendee.create({ data: { eventId, email: attendee.email, name: attendee.name, rsvp: attendee.rsvp, comment: attendee.comment } });
     }
+    changed = true;
   }
+  return changed;
+}
+
+/** JSON with sorted keys — jsonb columns do not preserve key order. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value ?? null, (_key, item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, (item as Record<string, unknown>)[key]]))
+      : item
+  );
 }
 
 function parseGoogleBoundary(

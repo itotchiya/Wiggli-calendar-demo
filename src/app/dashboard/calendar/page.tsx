@@ -351,6 +351,7 @@ export default function CalendarPage() {
   const [previewEvent, setPreviewEvent] = useState<CalendarEventItem | null>(null);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const calendarSyncRunning = useRef(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -421,6 +422,9 @@ export default function CalendarPage() {
       await loadEvents();
       return;
     }
+    // A slow pass must not stack a second one on top from the 15s timer.
+    if (calendarSyncRunning.current) return;
+    calendarSyncRunning.current = true;
     setSyncing(true);
     try {
       const response = await fetch("/api/sync", { method: "POST" });
@@ -430,6 +434,7 @@ export default function CalendarPage() {
       }
       await loadEvents();
     } finally {
+      calendarSyncRunning.current = false;
       setSyncing(false);
     }
   };

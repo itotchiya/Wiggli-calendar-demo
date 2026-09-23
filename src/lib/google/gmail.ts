@@ -14,7 +14,9 @@ export type InviteEmailInput = {
   subject: string;
   html: string;
   text: string;
-  icsContent: string; // full METHOD:REQUEST calendar body
+  icsContent: string; // full METHOD:REQUEST (or CANCEL) calendar body
+  /** Must match the VCALENDAR METHOD inside icsContent. Defaults to REQUEST. */
+  icsMethod?: "REQUEST" | "CANCEL";
   icsFilename?: string;
   replyTo?: string;
   /** Gmail thread to append this message to after the first slot invitation. */
@@ -90,7 +92,7 @@ export function buildInviteMime(input: InviteEmailInput): string {
   // VCALENDAR METHOD — Apple checks this pair before engaging its RSVP UI.
   const calendarPart = [
     `--${altBoundary}`,
-    'Content-Type: text/calendar; method=REQUEST; charset="UTF-8"; component="VEVENT"; name="' + filename + '"',
+    `Content-Type: text/calendar; method=${input.icsMethod ?? "REQUEST"}; charset="UTF-8"; component="VEVENT"; name="` + filename + '"',
     "Content-Disposition: inline; filename=\"" + filename + "\"",
     "Content-Transfer-Encoding: base64",
     "",

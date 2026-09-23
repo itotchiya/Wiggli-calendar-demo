@@ -3,7 +3,9 @@ import { auth } from "@/lib/auth";
 import { syncEventById, syncGoogleCalendar } from "@/lib/sync-service";
 import { syncInboundGmailReplies } from "@/lib/google/gmail-replies";
 import { syncInboundProposals } from "@/lib/google/proposal-sync";
-import { AuthExpiredError } from "@/lib/google-auth";
+import { AuthExpiredError, withFreshGoogleClient } from "@/lib/google-auth";
+import { resolveAcceptedSlotGroups, type SlotGroupResult } from "@/lib/slot-groups";
+import { ensureCalendarWatch } from "@/lib/google/calendar-watch";
 
 /**
  * Mirror native calendar RSVP responses into SQLite.
@@ -51,6 +53,18 @@ export async function POST(req: Request) {
     // RSVP state, so a second events.get request per stored event is redundant
     // (and quickly exhausts Google's per-user query quota). Keep the targeted
     // per-event path for the preview refresh button only.
+    // Proposals live only in Gmail and are independent of the Calendar pull,
+    // so both run concurrently once Gmail replies are applied to Google.
+    const proposalsPromise = syncInboundProposals(
+      session.accessToken,
+      session.user.email.toLowerCase(),
+      eventId
+    ).catch((error: Error) => ({ scannedMessages: 0, newProposals: 0, errors: [error.message] }));
+
+    // The full Calendar API response already contains each attendee's current
+    // RSVP state, so a second events.get request per stored event is redundant
+    // (and quickly exhausts Google's per-user query quota). Keep the targeted
+    // per-event path for the preview refresh button only.
     const attendeeResult = eventId
       ? (await syncEventById(session.accessToken, eventId)).result
       : { syncedEvents: 0, updatedAttendees: 0, importedEvents: 0, updatedEvents: 0, errors: [] as string[] };
@@ -71,24 +85,33 @@ export async function POST(req: Request) {
     };
 
     // "Propose a new time" notifications live only in Gmail (the Calendar API
-    // never exposes counter-proposals) — scan them in the same pass.
-    let proposals;
+    // never exposes counter-proposals).
+    const proposals = await proposalsPromise;
+
+    // Accepted multi-slot invites → cancel the sibling slots. The Calendar
+    // webhook does the same instantly; this poll is the fallback (and the
+    // only path on localhost, which Google cannot reach). It also keeps the
+    // 7-day push channel renewed.
+    const organizerEmail = session.user.email.toLowerCase();
+    let slotGroups: SlotGroupResult;
     try {
-      proposals = await syncInboundProposals(
-        session.accessToken,
-        session.user.email.toLowerCase(),
-        eventId
-      );
+      slotGroups = await withFreshGoogleClient(session.accessToken, organizerEmail, async (client) => {
+        await ensureCalendarWatch(client, organizerEmail).catch((error: Error) =>
+          console.warn("[sync] calendar watch not registered:", error.message)
+        );
+        return resolveAcceptedSlotGroups(client, organizerEmail);
+      });
     } catch (error) {
-      proposals = { scannedMessages: 0, newProposals: 0, errors: [(error as Error).message] };
+      slotGroups = { resolvedGroups: 0, cancelledSlots: 0, errors: [(error as Error).message] };
     }
 
     return NextResponse.json({
-      ok: result.errors.length === 0 && inboundReplies.errors.length === 0 && proposals.errors.length === 0,
+      ok: result.errors.length === 0 && inboundReplies.errors.length === 0 && proposals.errors.length === 0 && slotGroups.errors.length === 0,
       ...result,
       calendarSync,
       inboundReplies,
       proposals,
+      slotGroups,
     });
   } catch (err) {
     if (err instanceof AuthExpiredError) {

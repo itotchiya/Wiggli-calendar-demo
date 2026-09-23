@@ -36,6 +36,8 @@ model Event {
   hangoutLink    String? // real Google Meet URL when a conference was provisioned
   reminderMinutes Int? // null = calendar default; stored for email rendering
   previewData     Json? // organizer profile, avatars, linked records, locations, meeting links
+  /** Shared by the N events of one multi-slot invite; accepting one slot cancels the others. */
+  slotGroupId     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -45,6 +47,7 @@ model Event {
 
   @@index([googleEventId])
   @@index([source])
+  @@index([slotGroupId])
 }
 
 /** A "Propose a new time" counter-proposal detected from the organizer's Gmail. */
@@ -75,6 +78,9 @@ model Attendee {
   rsvp        String    @default("NEEDS_ACTION") // NEEDS_ACTION | ACCEPTED | TENTATIVE | DECLINED
   comment     String? // Optional response comment from Google Calendar
   respondedAt DateTime?
+  /** Gmail thread + delivered RFC Message-ID of this slot's invite, so a CANCEL lands in the same conversation. */
+  inviteThreadId  String?
+  inviteMessageId String?
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
@@ -86,6 +92,12 @@ model OrganizerAccount {
   email         String   @unique
   refreshToken  String? // Google OAuth refresh token for offline RSVP sync
   calendarAlias String?  @unique // stable Resend inbound organizer address
+  /** Google Calendar push channel (events.watch) — expires after at most 7 days. */
+  calendarChannelId         String?   @unique
+  calendarChannelResourceId String?
+  calendarChannelToken      String?
+  calendarChannelAddress    String?
+  calendarChannelExpiresAt  DateTime?
   createdAt     DateTime @default(now())
 }
 

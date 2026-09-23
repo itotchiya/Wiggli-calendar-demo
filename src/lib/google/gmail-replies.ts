@@ -15,6 +15,11 @@ const STATUS_TO_ACTION = {
   DECLINED: "no",
 } as const;
 
+// Gmail messages already inspected that carry no reply for a Wiggli event
+// (other organizers, deleted events, non-REPLY parts). Remembering them keeps
+// each 15s poll from re-downloading the same messages and attachments.
+const irrelevantMessageIds = new Set<string>();
+
 function isUniqueConstraintError(error: unknown): boolean {
   return Boolean(
     error &&
@@ -77,12 +82,25 @@ export async function syncInboundGmailReplies(
     maxResults: 100,
   });
 
-  for (const message of list.data.messages ?? []) {
-    if (!message.id) continue;
+  const messages = (list.data.messages ?? []).filter(
+    (message): message is gmail_v1.Schema$Message & { id: string } =>
+      Boolean(message.id) && !irrelevantMessageIds.has(message.id!)
+  );
+  const processed = new Set(
+    (
+      await db.rsvpTokenLog.findMany({
+        where: { token: { in: messages.map((message) => `gmail:${message.id}`) } },
+        select: { token: true },
+      })
+    ).map((log) => log.token)
+  );
+
+  for (const message of messages) {
     result.scannedMessages += 1;
     const token = `gmail:${message.id}`;
-    if (await db.rsvpTokenLog.findFirst({ where: { token }, select: { id: true } })) continue;
+    if (processed.has(token)) continue;
 
+    let relevant = false;
     try {
       const full = await gmail.users.messages.get({ userId: "me", id: message.id, format: "full" });
       const parts = await calendarParts(gmail, message.id, full.data.payload ?? undefined);
@@ -99,9 +117,11 @@ export async function syncInboundGmailReplies(
           where: { iCalUID: reply.uid },
           include: { attendees: true },
         });
-        if (!event || (onlyEventId && event.id !== onlyEventId)) continue;
+        if (!event) continue;
         const attendee = event.attendees.find((item) => item.email.toLowerCase() === reply.attendeeEmail);
         if (!attendee) continue;
+        relevant = true;
+        if (onlyEventId && event.id !== onlyEventId) continue;
 
         if (event.googleEventId) {
           const remoteEvent = await calendar.events.get({
@@ -151,6 +171,7 @@ export async function syncInboundGmailReplies(
         if (attendee.rsvp !== reply.status) result.updatedAttendees += 1;
         break;
       }
+      if (!relevant) irrelevantMessageIds.add(message.id);
     } catch (error) {
       result.errors.push(`Gmail message ${message.id}: ${(error as Error).message}`);
     }

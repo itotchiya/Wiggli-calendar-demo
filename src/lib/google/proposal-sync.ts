@@ -71,6 +71,10 @@ function extractNote(body: string): string | null {
   return match ? match[1]!.trim().slice(0, 300) : null;
 }
 
+// Notifications already inspected that match no Wiggli event — skipped on
+// later polls so each tick does not re-download them.
+const irrelevantMessageIds = new Set<string>();
+
 export async function syncInboundProposals(
   accessToken: string,
   organizerEmail: string,
@@ -87,17 +91,36 @@ export async function syncInboundProposals(
     maxResults: 100,
   });
 
-  for (const message of list.data.messages ?? []) {
-    if (!message.id) continue;
+  const messages = (list.data.messages ?? []).filter(
+    (message): message is typeof message & { id: string } => Boolean(message.id) && !irrelevantMessageIds.has(message.id!)
+  );
+  const processed = new Set(
+    (
+      await db.rsvpTokenLog.findMany({
+        where: { token: { in: messages.map((message) => `proposal:${message.id}`) } },
+        select: { token: true },
+      })
+    ).map((log) => log.token)
+  );
+  // A per-event refresh narrows the event lookup, so a miss there is not proof
+  // the message is irrelevant.
+  const skipLater = (id: string) => {
+    if (!onlyEventId) irrelevantMessageIds.add(id);
+  };
+
+  for (const message of messages) {
     result.scannedMessages += 1;
     const token = `proposal:${message.id}`;
-    if (await db.rsvpTokenLog.findFirst({ where: { token }, select: { id: true } })) continue;
+    if (processed.has(token)) continue;
 
     try {
       const full = await gmail.users.messages.get({ userId: "me", id: message.id, format: "full" });
       const subject =
         full.data.payload?.headers?.find((h) => h.name?.toLowerCase() === "subject")?.value ?? "";
-      if (!PROPOSAL_SUBJECT_PATTERNS.some((pattern) => pattern.test(subject))) continue;
+      if (!PROPOSAL_SUBJECT_PATTERNS.some((pattern) => pattern.test(subject))) {
+        irrelevantMessageIds.add(message.id);
+        continue;
+      }
 
       // Notification threads carry the event title in the subject:
       // "<Title> - <Attendee> proposed a new time" or updated-invitation forms.
@@ -120,12 +143,18 @@ export async function syncInboundProposals(
       const event =
         candidates.find((item) => titleCandidate && item.summary.toLowerCase().includes(titleCandidate.toLowerCase()))
         ?? (candidates.length === 1 ? candidates[0] : undefined);
-      if (!event) continue;
+      if (!event) {
+        skipLater(message.id);
+        continue;
+      }
 
       const bodies = textParts(full.data.payload ?? undefined);
       const body = bodies.find((item) => !item.toLowerCase().startsWith("<!doctype")) ?? bodies.join("\n");
       const slotLabel = extractSlotLabel(body);
-      if (!slotLabel) continue;
+      if (!slotLabel) {
+        skipLater(message.id);
+        continue;
+      }
 
       // Who proposed: Google names the attendee in the subject or body.
       const whoMatch =
